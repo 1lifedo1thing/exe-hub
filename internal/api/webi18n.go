@@ -164,6 +164,10 @@ var webStrings = map[string]map[string]string{
 		"since.pre":  "since ", // around the day the profile was first seen; the day goes between
 		"since.post": "",
 		"noposts":    "No posts yet.",
+		"invited.by": "invited by {name}", // an invited key's profile: who let it past the gate
+		// the replies frame another page shows under a post (PLAN.md, Replies under a blog post)
+		"reply.frame": "Replies on {host}",
+		"noreplies":   "No replies yet.",
 		// a post's embeds
 		"archived": "Archived copy",
 		"picture":  "Picture", // a picture's name when the file had none
@@ -251,6 +255,7 @@ var webStrings = map[string]map[string]string{
 		"nogate":        "This hub has no token gate.",
 		"unknown":       "Unknown: the hub can’t read holdings right now.",
 		"admin":         "An admin key: the gate does not apply.",
+		"invited":       "Invited by an admin: the gate does not apply.",
 		"enough":        "Enough to post. The hub asks for {need}.",
 		"less":          "Less than the {need} the hub asks for, so this address can read but not post.",
 		"pic.max":       "A picture is at most 8 MB.",
@@ -310,6 +315,9 @@ var webStrings = map[string]map[string]string{
 		"since.pre":          "加入于 ",
 		"since.post":         "",
 		"noposts":            "还没有帖子。",
+		"invited.by":         "由 {name} 邀请",
+		"reply.frame":        "{host} 上的回复",
+		"noreplies":          "还没有回复。",
 		"archived":           "存档副本",
 		"picture":            "图片",
 		"sound":              "声音",
@@ -390,6 +398,7 @@ var webStrings = map[string]map[string]string{
 		"nogate":             "这个 hub 没有代币门槛。",
 		"unknown":            "未知：hub 暂时无法读取持仓。",
 		"admin":              "管理员密钥：不受发帖条件限制。",
+		"invited":            "受管理员邀请：不受发帖条件限制。",
 		"enough":             "足以发帖。hub 要求 {need}。",
 		"less":               "不足 hub 要求的 {need}，这个地址只能阅读，不能发帖。",
 		"pic.max":            "图片最大 8 MB。",
@@ -447,6 +456,9 @@ var webStrings = map[string]map[string]string{
 		"since.pre":          "参加日 ",
 		"since.post":         "",
 		"noposts":            "まだ投稿はありません。",
+		"invited.by":         "{name} の招待",
+		"reply.frame":        "{host} での返信",
+		"noreplies":          "まだ返信はありません。",
 		"archived":           "アーカイブ",
 		"picture":            "画像",
 		"sound":              "音声",
@@ -527,6 +539,7 @@ var webStrings = map[string]map[string]string{
 		"nogate":             "この hub にトークンの条件はありません。",
 		"unknown":            "不明：hub はいま保有量を読めません。",
 		"admin":              "管理者の鍵：条件は適用されません。",
+		"invited":            "管理者の招待：条件は適用されません。",
 		"enough":             "投稿できます。hub が求めるのは {need} です。",
 		"less":               "hub が求める {need} に満たないため、このアドレスは閲覧はできますが投稿はできません。",
 		"pic.max":            "画像は最大 8 MB です。",

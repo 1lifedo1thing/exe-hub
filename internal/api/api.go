@@ -170,6 +170,7 @@ func (s *Server) Handler() http.Handler {
 	// guide as a read by whatever fetched it
 	mux.HandleFunc("GET /{$}", s.counted("home", s.handleHome))
 	mux.HandleFunc("GET /p/{id}", s.counted("thread", s.handleThreadPage))
+	mux.HandleFunc("GET /p/{id}/replies", s.counted("frame", s.handleRepliesFrame))
 	mux.HandleFunc("GET /u/{id}", s.counted("profile", s.handleProfilePage))
 	mux.HandleFunc("GET /search", s.counted("search", s.handleSearchPage))
 	mux.HandleFunc("GET /stats", s.handleStatsPage)
@@ -210,6 +211,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/translations", s.handleTranslations)
 	mux.HandleFunc("GET /v1/summaries", s.handleSummaries)
 	mux.HandleFunc("GET /v1/peers", s.handlePeers)
+	mux.HandleFunc("GET /v1/invites", s.handleInvites)
 	return cors(mux)
 }
 
@@ -332,8 +334,8 @@ func (s *Server) handleSeq(w http.ResponseWriter, r *http.Request) {
 // handleGate says whether a key may post here now, before it signs
 // anything — for the public pages' wallet sign-in, where every signature
 // is a popup. It reaches the verdict policy() would for a post.create,
-// minus the signature: banned, the gate ("open", "admin", "pass",
-// "below" or "unavailable"), the cooldown's wait in seconds, and each
+// minus the signature: banned, the gate ("open", "admin", "invited",
+// "pass", "below" or "unavailable"), the cooldown's wait in seconds, and each
 // mint's threshold with what the key holds (the balances the check read,
 // for the profile dialog). Public like every read. A check the gate cannot answer from its cache costs
 // an RPC call, so those share a small rate limit (429 past it).
@@ -396,6 +398,17 @@ func (s *Server) handleGate(w http.ResponseWriter, r *http.Request) {
 	}
 	if c.IsAdmin(pid) {
 		out.Gate, out.Cooldown = "admin", 0
+	} else if out.Mode == "token" {
+		// an invited key passes whatever it holds (PLAN.md, Invites); the
+		// balance read above is still its to see
+		invited, err := s.St.Invited(base64.StdEncoding.EncodeToString(pub))
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		if invited {
+			out.Gate = "invited"
+		}
 	}
 	if out.Cooldown > 0 {
 		last, err := s.St.LastPost(base64.StdEncoding.EncodeToString(pub))
@@ -508,6 +521,10 @@ func (s *Server) policy(e *envelope.Envelope) error {
 		if !admin {
 			return errors.New("peer curation requires an admin key")
 		}
+	case "invite.set", "invite.lift":
+		if !admin {
+			return errors.New("inviting requires an admin key")
+		}
 	case "post.mark":
 		// one's own boxes, no cooldown and no gate (it is no post), but
 		// not from a banned key — the tick shows on the page like words
@@ -537,6 +554,11 @@ func (s *Server) policy(e *envelope.Envelope) error {
 			if wait := int64(cd)*1000 - (time.Now().UnixMilli() - last); last > 0 && wait > 0 {
 				return &cooldownError{wait: int((wait + 999) / 1000)}
 			}
+		}
+		// an invited key skips the token gate and nothing else: the
+		// cooldown above and a ban still hold (PLAN.md, Invites)
+		if invited, err := s.St.Invited(e.Author); err != nil || invited {
+			return err
 		}
 		pub, _ := e.Pub()
 		return s.Gate.Check(pub)
@@ -602,9 +624,16 @@ func (s *Server) uploadPolicy(w http.ResponseWriter, pub ed25519.PublicKey) bool
 		return false
 	}
 	if !s.Cfg.Get().IsAdmin(pid) {
-		if err := s.Gate.Check(pub); err != nil {
-			writeErr(w, http.StatusForbidden, err)
+		invited, err := s.St.Invited(base64.StdEncoding.EncodeToString(pub))
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
 			return false
+		}
+		if !invited {
+			if err := s.Gate.Check(pub); err != nil {
+				writeErr(w, http.StatusForbidden, err)
+				return false
+			}
 		}
 	}
 	if err := s.IPFS.Available(); err != nil {
@@ -762,7 +791,27 @@ func (s *Server) handleProfile(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, p)
+	iv, err := s.St.InviteOf(p.ID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		*store.Profile
+		Invited *store.Invite `json:"invited,omitempty"`
+	}{p, iv})
+}
+
+// handleInvites lists the keys this hub's admins let past the gate
+// (PLAN.md, Invites), newest first. Public like every read: who may post
+// here without holding is no secret.
+func (s *Server) handleInvites(w http.ResponseWriter, r *http.Request) {
+	list, err := s.St.Invites()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"invites": list})
 }
 
 func (s *Server) handlePost(w http.ResponseWriter, r *http.Request) {

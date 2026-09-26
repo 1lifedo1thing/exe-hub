@@ -6,7 +6,9 @@
 package store
 
 import (
+	"crypto/ed25519"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
@@ -18,6 +20,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"exehub/internal/envelope"
+	"exehub/internal/identity"
 	"exehub/internal/mention"
 )
 
@@ -145,6 +148,16 @@ CREATE TABLE IF NOT EXISTS bans (
   by     TEXT NOT NULL,               -- admin profile id
   ts     INTEGER NOT NULL
 );
+
+-- keys an admin let past the token gate (PLAN.md, Who may post — Invites)
+CREATE TABLE IF NOT EXISTS invites (
+  target  TEXT PRIMARY KEY,           -- the invited public key, base64
+  profile TEXT NOT NULL,              -- its profile id, for the pages
+  note    TEXT NOT NULL DEFAULT '',
+  by      TEXT NOT NULL,              -- admin profile id
+  ts      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS invites_profile ON invites(profile);
 
 CREATE TABLE IF NOT EXISTS seqs (
   author TEXT PRIMARY KEY,
@@ -778,6 +791,15 @@ func apply(tx *sql.Tx, id string, e *envelope.Envelope, op any, received int64, 
 	case *envelope.BanLift:
 		_, err = tx.Exec(`DELETE FROM bans WHERE target=?`, v.Target)
 		return nil, err
+	case *envelope.InviteSet:
+		b, _ := base64.StdEncoding.DecodeString(v.Target) // valid: Op checked it
+		_, err = tx.Exec(`INSERT INTO invites (target, profile, note, by, ts) VALUES (?,?,?,?,?)
+			ON CONFLICT(target) DO UPDATE SET note=excluded.note, by=excluded.by, ts=excluded.ts`,
+			v.Target, identity.Fingerprint(ed25519.PublicKey(b)), v.Note, pid, received)
+		return nil, err
+	case *envelope.InviteLift:
+		_, err = tx.Exec(`DELETE FROM invites WHERE target=?`, v.Target)
+		return nil, err
 	case *envelope.PeerAdd:
 		_, err = tx.Exec(`INSERT INTO peers (hub, addr, added_by, ts) VALUES (?,?,?,?)
 			ON CONFLICT(hub) DO UPDATE SET addr=excluded.addr, added_by=excluded.added_by, ts=excluded.ts`,
@@ -851,7 +873,7 @@ func (s *Store) Rebuild() error {
 		return err
 	}
 	defer tx.Rollback()
-	for _, t := range []string{"profiles", "posts", "embeds", "marks", "bans", "seqs", "peers"} {
+	for _, t := range []string{"profiles", "posts", "embeds", "marks", "bans", "invites", "seqs", "peers"} {
 		if _, err := tx.Exec(`DELETE FROM ` + t); err != nil {
 			return err
 		}
@@ -2465,6 +2487,62 @@ func (s *Store) LastPost(author string) (int64, error) {
 	var t sql.NullInt64
 	err := s.db.QueryRow(`SELECT MAX(received) FROM messages WHERE author=? AND type='post.create'`, author).Scan(&t)
 	return t.Int64, err
+}
+
+// Invite is one key an admin let past the token gate, as the pages and
+// /v1/profile show it: who invited it, when, and the note they wrote.
+type Invite struct {
+	Target string `json:"target"`
+	By     string `json:"by"`
+	ByName string `json:"by_name,omitempty"`
+	Note   string `json:"note,omitempty"`
+	TS     int64  `json:"ts"`
+}
+
+// Invited says whether this public key (base64, as an author is written)
+// is on the invite list.
+func (s *Store) Invited(pub string) (bool, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM invites WHERE target=?`, pub).Scan(&n)
+	return n > 0, err
+}
+
+// InviteOf is the invite behind a profile id, nil when there is none.
+// The profile's own key is matched, never the id alone: a key ground to
+// share an invited id is not the invited one.
+func (s *Store) InviteOf(profileID string) (*Invite, error) {
+	iv := &Invite{}
+	err := s.db.QueryRow(`SELECT i.target, i.by, COALESCE(pr.name, ''), i.note, i.ts
+		FROM invites i LEFT JOIN profiles pr ON pr.id = i.by
+		LEFT JOIN profiles me ON me.id = i.profile
+		WHERE i.profile=? AND (me.pubkey IS NULL OR me.pubkey = i.target)`, profileID).
+		Scan(&iv.Target, &iv.By, &iv.ByName, &iv.Note, &iv.TS)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return iv, nil
+}
+
+// Invites lists every invite, newest first.
+func (s *Store) Invites() ([]Invite, error) {
+	rows, err := s.db.Query(`SELECT i.target, i.by, COALESCE(pr.name, ''), i.note, i.ts
+		FROM invites i LEFT JOIN profiles pr ON pr.id = i.by ORDER BY i.ts DESC, i.target`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Invite{}
+	for rows.Next() {
+		var iv Invite
+		if err := rows.Scan(&iv.Target, &iv.By, &iv.ByName, &iv.Note, &iv.TS); err != nil {
+			return nil, err
+		}
+		out = append(out, iv)
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) Banned(profileID string) (bool, error) {

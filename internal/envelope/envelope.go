@@ -113,6 +113,21 @@ type BanLift struct {
 	Target string `json:"target"`
 }
 
+// InviteSet / InviteLift let a key past the token gate, or put it back
+// under it, admin-only (PLAN.md, Who may post — Invites). The target is
+// the whole public key in standard base64, as an author is written, not
+// a profile id: an invite grants something, and a key ground to match
+// an invited 16-hex id must not pass. (A ban takes the id: a key ground
+// to match a banned one only bans itself.)
+type InviteSet struct {
+	Target string `json:"target"`
+	Note   string `json:"note,omitempty"`
+}
+
+type InviteLift struct {
+	Target string `json:"target"`
+}
+
 // PeerAdd / PeerRemove curate the hubs this hub replicates from,
 // admin-only. Hub is the remote hub identity's fingerprint; Addr an HTTP
 // multiaddr profile (see ParseMultiaddr).
@@ -292,6 +307,27 @@ func (e *Envelope) Op() (any, error) {
 			return nil, errors.New("target: not a profile id")
 		}
 		return v, nil
+	case "invite.set":
+		v := &InviteSet{}
+		if err := strictBody(e.Body, v); err != nil {
+			return nil, err
+		}
+		if !validPubKey(v.Target) {
+			return nil, errors.New("target: not a base64 ed25519 public key")
+		}
+		if len(v.Note) > MaxReason {
+			return nil, errors.New("note too long")
+		}
+		return v, nil
+	case "invite.lift":
+		v := &InviteLift{}
+		if err := strictBody(e.Body, v); err != nil {
+			return nil, err
+		}
+		if !validPubKey(v.Target) {
+			return nil, errors.New("target: not a base64 ed25519 public key")
+		}
+		return v, nil
 	case "peer.add":
 		v := &PeerAdd{}
 		if err := strictBody(e.Body, v); err != nil {
@@ -330,6 +366,14 @@ func validMsgID(s string) bool {
 	}
 	_, err := hex.DecodeString(s)
 	return err == nil
+}
+
+// validPubKey is an author as the envelope writes one: 32 bytes in
+// standard, padded base64, and only that spelling, so one key has one
+// row wherever it is stored.
+func validPubKey(s string) bool {
+	b, err := base64.StdEncoding.DecodeString(s)
+	return err == nil && len(b) == ed25519.PublicKeySize && base64.StdEncoding.EncodeToString(b) == s
 }
 
 func validProfileID(s string) bool {

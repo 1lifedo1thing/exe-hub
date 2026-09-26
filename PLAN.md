@@ -222,11 +222,12 @@ Envelope: `{type, author (pubkey b64), seq, ts, body}`.
   page reads them, from nought (`card.Boxes`), and `/v1/msg` refuses a
   box the post does not have; the store refuses anyone but the author.
 - `ban.set` / `ban.lift` — admin-only (author must be a config-assigned
-  admin): ban or unban a target pubkey, with an optional reason on
+  admin): ban or unban a target profile id, with an optional reason on
   `ban.set`.
-- `invite.set` / `invite.lift` — admin-only, planned 2026-09-26: invite
-  or uninvite a target pubkey, with an optional note on `invite.set`; an
-  invited key passes the token gate (see Invites, under Who may post).
+- `invite.set` / `invite.lift` — admin-only (built 2026-09-26): invite
+  or uninvite a target public key (base64, as an author is written),
+  with an optional note on `invite.set`; an invited key passes the token
+  gate (see Invites, under Who may post).
 - No `post.edit` in v1.
 - A mention is not an op: it is `@` and a profile id in a post's text
   (see Mentions).
@@ -238,7 +239,7 @@ feed ordering uses hub receive time.
 ## Storage (SQLite, WAL mode)
 
 - `messages` — append-only log of raw signed envelopes. **Source of truth.**
-- `profiles`, `posts`, `embeds`, `pins`, `bans` (and `invites`, planned) — derived indexes,
+- `profiles`, `posts`, `embeds`, `pins`, `bans`, `invites` — derived indexes,
   rebuildable by replaying `messages`. Schema changes to derived tables
   never lose data.
 - Feed queries use keyset pagination (`before=<id>`), never OFFSET.
@@ -313,7 +314,7 @@ launch mint is `9raU…pump` (6 decimals); the initial threshold is
   Like the token gate it is not retroactive: existing posts stay, and the
   banned author may still `post.delete` their own posts. (Admin deletion
   of others' posts is a separate power, deliberately not in v1.)
-- **Invites — a key let past the gate by an admin (planned 2026-09-26,
+- **Invites — a key let past the gate by an admin (built 2026-09-26,
   with Livid).** The positive mirror of bans: signed `invite.set` /
   `invite.lift` from a config admin, in the log, materialized in a
   derived `invites` table (target pubkey, inviting admin, note, time),
@@ -321,9 +322,13 @@ launch mint is `9raU…pump` (6 decimals); the initial threshold is
   rebuild. Livid's frame: not a vouch for one kind of key but a list of
   invited, trusted keys — a Planet site's key (see Replies under a blog
   post), a guest writer who holds no $V2EX, another exe node.
-  - The target is the **whole pubkey**, as `ban.set` takes, never the
-    16-hex id: an id is 64 bits of a hash, and a key ground to match an
-    invited id must not pass. Pages still show the id and the name.
+  - The target is the **whole public key** in standard base64, the one
+    spelling an author has (`validPubKey`), never the 16-hex id: an id is
+    64 bits of a hash, and a key ground to match an invited id must not
+    pass. A ban takes the id, and may: a key ground to match a banned id
+    only bans itself. The table keeps the id beside the key for the
+    pages, and a profile shows an invite only when its own key is the
+    one invited. Pages still show the id and the name.
   - An invite grants **passing the token gate and nothing else**: the
     cooldown still applies (only admins skip it), a ban beats an invite,
     and an invited key has no admin power. Lifting one puts the key back
@@ -331,9 +336,16 @@ launch mint is `9raU…pump` (6 decimals); the initial threshold is
     touches posts already made.
   - **Per hub, like bans.** It matters only on the hub where a key's
     posts arrive: replicated content skips the gate already.
-  - **Visible.** `GET /v1/gate` answers `invited`, and the profile page
-    and the Hub app's profile say "Invited by <admin's name>", so a reader
-    sees why an account holding nothing posts here.
+  - **Visible.** `GET /v1/gate` answers `invited` (in token mode; an
+    admin is still `admin`), `GET /v1/profile/{id}` carries `invited`
+    ({target, by, by_name, note, ts}), `GET /v1/invites` lists them all,
+    newest first, and the profile page's line under the name ends
+    "invited by <admin's name>", linked to the admin, so a reader sees
+    why an account holding nothing posts here. The page's Profile dialog
+    reads "Invited by an admin: the gate does not apply." The Hub app has
+    no profile view to say it in.
+  - Uploads meet the same rule: an invited key's `POST /v1/avatar` and
+    `/v1/upload` skip the gate as its posts do.
   - Not in config (an `invited: [...]` list beside `admins`) for the
     reasons bans left it: no reload, an audit trail, and no hand edit on
     the host and in the VM for every key.
@@ -2688,7 +2700,7 @@ at a reply on its page.
   measures the three heights and tops, the word, and the triangles.
 - **Left**: the JSON API says nothing of summaries yet.
 
-## Replies under a blog post — Planet sites on the hub (planned 2026-09-26)
+## Replies under a blog post — Planet sites on the hub (hub side built 2026-09-26)
 
 My idea post `d89824f7` (2026-09-25): publish a Planet post and it
 announces itself on the hub, and the replies it gets here show under the
@@ -2714,9 +2726,11 @@ post) and the replies frame.
   page with a frame flag in web.html:
   - the replies only (the blog shows the article itself), paged as the
     thread page pages them, the pager inside the frame;
-  - no desk, menu bar or window chrome, and a transparent body, so the
-    blog's own Replies window is the frame around them (both draw with
-    exe-stats' chrome.css, so the rows match);
+  - no desk, menu bar or window chrome: the page is `html.framed`, its
+    body white with no padding and its `.frame` without border, margin
+    or shadow, so the blog's own Replies window is the sunken frame
+    around the rows (both draw with exe-stats' chrome.css, so they
+    match); the last row drops its rule against that frame;
   - the reader's language as every page picks it (the frame's request
     carries the browser's Accept-Language; `?lang=` wins), Show Original
     included;
@@ -2725,12 +2739,20 @@ post) and the replies frame.
   - its height sent to the parent whenever it changes, `{hub: "height",
     h}` by `postMessage` from a ResizeObserver; the page that frames it
     trusts only its own frame's window and the hub's origin;
-  - every link opens in the top window (`<base target="_top">`);
+  - every link opens a new tab (`<base target="_blank">`), so the reader
+    keeps the post they were reading; the pager alone stays in the frame
+    (`fpager`, `target="_self"`). No picture viewer: a picture or a page
+    is its plain link, since a viewer in a frame as tall as its rows
+    would open wherever the rows are;
+  - `noindex` in the head and in `X-Robots-Tag`;
   - the Reply link under each reply, shown when the page says a reader
-    is signed in (`{hub: "signed-in", on}` from `window.parent`; the
-    message grants nothing, so any origin may send it), sends `{hub:
-    "aim", id, name, words}` up instead of aiming a composer here: the
-    composer is the blog page's (below);
+    is signed in (`{hub: "signed-in", on}` from `window.parent`, which
+    sets `html.wallet` as the thread page's own sign-in does; the message
+    grants nothing, so any origin may send it), sends `{hub: "aim", id,
+    name, words}` up instead of aiming a composer here: the composer is
+    the blog page's (below). `{hub: "ready"}` goes up as the frame loads;
+  - a reply to a reply off this page links to the hub's thread page
+    (`/p/{root}?at=`), which finds its page;
   - a whole id this hub does not hold (yet) answers the empty state, not
     404, and stays live: a reply may name a root that arrives later;
   - counted by stats as its own lane, `frame`, not `thread`.
@@ -2762,8 +2784,8 @@ post) and the replies frame.
 - **Tests.** Go: `TestInvites` (set, lift, a non-admin's refused, ban
   beats invite, cooldown kept, a rebuild keeps them, the gate verdict)
   and `TestWebRepliesFrame` (replies only, no chrome, an unknown whole
-  id's empty state, `_top`, the language rule, Reply links only after
-  the signed-in message). Playwright: a page on another origin frames a
+  id's empty state and every other id a 404, `_blank`, noindex, the
+  language rule, the messages' script) — both built. Playwright: a page on another origin frames a
   scratch hub's thread, checks the height messages grow the frame, that
   a Reply link sends its aim up, and that a reply posted from the page by
   a mock wallet slides in live. Both hubs deploy before it is called

@@ -1,5 +1,5 @@
 {{define "page"}}<!DOCTYPE html>
-<html lang="{{.L.Tag}}">
+<html lang="{{.L.Tag}}"{{if eq .Page "frame"}} class="framed"{{end}}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -31,7 +31,8 @@
 {{end}}{{end}}{{if .Published}}<meta property="article:published_time" content="{{.Published}}">
 <meta property="article:author" content="{{.Base}}/u/{{.Post.Author}}">
 {{end}}{{if .Profile}}<meta property="profile:username" content="{{.Profile.Name}}">
-{{end}}{{if eq .Page "search"}}<meta name="robots" content="noindex">{{end}}
+{{end}}{{if eq .Page "search"}}<meta name="robots" content="noindex">{{end}}{{if eq .Page "frame"}}<meta name="robots" content="noindex">
+<base target="_blank">{{end}}
 <style>
 /* The Platinum chrome — the window with its striped bar, hard shadow and
    close box, the sunken frame, the status strip and the push button —
@@ -634,6 +635,13 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 .profile h1 { margin: 0; font-size: 14px; }
 .profile p { margin: 4px 0 0; overflow-wrap: anywhere; }
 .alert { padding: 16px 14px; }
+/* The replies frame (PLAN.md, Replies under a blog post): the rows
+   alone, on white, for another page's window to hold. That window draws
+   the sunken frame, so this one draws no border and no margin, and the
+   page has no desk around it. */
+.framed body { padding: 0; background: #fff; }
+.framed .frame { margin: 0; border: 0; box-shadow: none; }
+.framed .post:last-child { border-bottom: 0; }
 </style>
 {{if eq .Page "stats"}}{{template "statscss"}}{{end}}</head>
 <body>
@@ -717,6 +725,12 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 </div>
 </div>
 </div>
+{{else if eq .Page "frame"}}
+<div class="frame"{{if .Live}} data-live="thread" data-root="{{.Root}}"{{end}}>
+  {{if .Pages}}<div class="pager rp">{{template "fpager" .}}</div>{{end}}
+  {{range .Replies}}{{template "post" .}}{{else}}<div class="pad">{{T "noreplies"}}</div>{{end}}
+  {{if .Pages}}<div class="pager rp end">{{template "fpager" .}}</div>{{end}}
+</div>
 {{else if eq .Page "search"}}
 <div class="window">
   <div class="titlebar"><a class="tbox" href="/{{.Q}}" title="{{T "back"}}" aria-label="{{T "back"}}"></a><span class="stripe"></span><span class="title">{{T "search"}}</span><span class="stripe"></span></div>
@@ -735,7 +749,7 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
       <span class="av">{{if .Profile.Avatar}}<img src="/v1/embed/{{.Profile.Avatar}}" alt="">{{else}}<img class="idn" src="/v1/identicon/{{.Profile.ID}}.svg" alt="">{{end}}</span>
       <div>
         <h1>{{if .Profile.Name}}{{.Profile.Name}}{{else}}{{.Profile.ID}}{{end}}</h1>
-        <div class="meta"><span class="mono">{{.Profile.ID}}</span>{{if .Since}} · {{T "since.pre"}}<time datetime="{{.SinceStamp}}" data-date>{{.Since}}</time>{{T "since.post"}}{{end}}</div>
+        <div class="meta"><span class="mono">{{.Profile.ID}}</span>{{if .Since}} · {{T "since.pre"}}<time datetime="{{.SinceStamp}}" data-date>{{.Since}}</time>{{T "since.post"}}{{end}}{{with .Invite}} · <a href="/u/{{.By}}{{$.Q}}">{{T "invited.by" "name" (or .ByName .By)}}</a>{{end}}</div>
         {{if .Profile.Bio}}<p>{{.Profile.Bio}}</p>{{end}}
       </div>
     </div>
@@ -1007,7 +1021,44 @@ document.addEventListener("change", e => {
   location.assign(u);
 });
 </script>
-<script>
+{{if eq .Page "frame"}}<script>
+// The replies frame (PLAN.md, Replies under a blog post). The page that
+// frames it hears how tall it is, whenever that changes, so the frame
+// never scrolls on its own; it may say a reader signed in with a wallet
+// there, which shows the Reply link under each reply; and a press on one
+// is sent up for that page's composer to aim at — a wallet reaches only
+// the top of a page, never a frame, so the composer is there. Nothing a
+// message says grants anything, so any page may send one and hear them.
+(() => {
+  const up = m => { try { parent.postMessage(m, "*"); } catch (e) {} };
+  let last = -1;
+  const tell = () => {
+    const h = Math.ceil(document.documentElement.getBoundingClientRect().height);
+    if (h !== last) { last = h; up({ hub: "height", h }); }
+  };
+  if ("ResizeObserver" in window) new ResizeObserver(tell).observe(document.body);
+  addEventListener("load", tell);
+  tell();
+  addEventListener("message", e => {
+    if (e.source !== parent || !e.data || e.data.hub !== "signed-in") return;
+    document.documentElement.classList.toggle("wallet", !!e.data.on);
+  });
+  // (a picture or a page is a plain link here, to a tab of its own, as
+  // every link in the frame is: a viewer window in a frame as tall as its
+  // rows would open wherever the rows happen to be)
+  document.addEventListener("click", e => {
+    const a = e.target instanceof Element && e.target.closest("a.rlink");
+    const post = a && a.closest(".post");
+    if (!post || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    const name = post.querySelector(".meta b"), said = post.querySelector(".text:not([hidden])");
+    const words = [...(said ? said.innerText.replace(/\s+/g, " ").trim() : "")];
+    up({ hub: "aim", id: post.id, name: name ? name.textContent : "", words: words.length > 80 ? words.slice(0, 80).join("") + "\u2026" : words.join("") });
+  });
+  up({ hub: "ready" });
+})();
+</script>
+{{else}}<script>
 // The picture viewer. Everything else on the page works without this.
 (() => {
   let z = 100;
@@ -1183,7 +1234,7 @@ document.addEventListener("change", e => {
     if (top) { top.remove(); mark(); }
   });
 })();
-</script>
+</script>{{end}}
 <script>
 // Videos in view play themselves, the way sepia.sol.build's do: muted and
 // looping once half of one is in view, paused when it leaves. A video's
@@ -1863,6 +1914,7 @@ document.addEventListener("change", e => {
     const needs = (v.mints || []).map(m => T(m.raw ? "units.raw" : "units.tokens", { n: m.amount })).join(T("or"));
     const why = v.banned ? T("banned")
       : v.gate === "admin" ? T("admin")
+      : v.gate === "invited" ? T("invited")
       : v.gate === "pass" ? T("enough", { need: needs })
       : v.gate === "below" ? T("less", { need: needs })
       : "";
@@ -2049,6 +2101,7 @@ document.addEventListener("change", e => {
 {{/* a thread past one page (PLAN.md, Public pages — Thread paging): the
      feed's strip, Prev and Next by page number, the replies this page
      holds between them */}}
+{{define "fpager"}}{{if .PrevHref}}<a class="btn prev back" href="{{.PrevHref}}" target="_self">{{template "arrow"}}<span>{{T "prev"}}</span></a>{{end}}<span class="stats">{{T "replies.range" "a" .From "b" .To "n" .Count}}</span>{{if .NextHref}}<a class="btn next fwd" href="{{.NextHref}}" target="_self"><span>{{T "next"}}</span>{{template "arrow-r"}}</a>{{end}}{{end}}
 {{define "tpager"}}{{if .PrevHref}}<a class="btn prev back" href="{{.PrevHref}}">{{template "arrow"}}<span>{{T "prev"}}</span></a>{{end}}<span class="stats">{{T "replies.range" "a" .From "b" .To "n" .Count}}</span>{{if .NextHref}}<a class="btn next fwd" href="{{.NextHref}}"><span>{{T "next"}}</span>{{template "arrow-r"}}</a>{{end}}{{end}}
 
 {{define "cursors"}}{{if eq .Page "search"}}/search?q={{.Query}}&amp;{{else if eq .Page "profile"}}/u/{{.Profile.ID}}?{{else}}/?{{end}}{{if .Lang}}lang={{.Lang}}&amp;{{end}}{{end}}

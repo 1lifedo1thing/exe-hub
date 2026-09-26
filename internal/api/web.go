@@ -428,7 +428,7 @@ type webData struct {
 	CardKind       string
 	Canonical      bool   // the page has one address: home, a thread, a profile
 	Published      string // a thread: the post's time, RFC 3339
-	Page           string // "home" | "thread" | "profile" | "error"
+	Page           string // "home" | "thread" | "frame" | "profile" | "error"
 	Posts          []webPost
 	Prev, Next     string // keyset cursors for the neighbouring pages, "" at either end
 	Live           bool   // the home page's first page and every thread: ships the live script
@@ -448,7 +448,8 @@ type webData struct {
 	Root               string      // the thread's root, which the live frame names for its filter
 	Summary            *webSummary // the thread's newest summary, in the window beside it (PLAN.md, Thread summaries)
 	Profile            *store.Profile
-	Since              string // the profile's first day as a UTC date, and SinceStamp its RFC 3339 form for the <time> element
+	Invite             *store.Invite // an invited key's profile: who let it past the gate (PLAN.md, Invites)
+	Since              string        // the profile's first day as a UTC date, and SinceStamp its RFC 3339 form for the <time> element
 	SinceStamp         string
 	Members, Count     int
 	Message            string
@@ -1762,6 +1763,80 @@ func (s *Server) handleThreadPage(w http.ResponseWriter, r *http.Request) {
 	s.webRender(w, r, http.StatusOK, d)
 }
 
+// handleRepliesFrame: /p/{id}/replies is a thread's replies alone, for
+// another page to frame under the post they answer (PLAN.md, Replies
+// under a blog post): no desk, no window, no head post, paged like the
+// thread page and live like it. The id must be whole — a blog carries
+// the one it was given — and a post this hub does not hold (yet) is an
+// empty list, not a 404: the root may be on its way from a peer, and a
+// reply may name it first. The page may be framed by anyone; its links
+// open in a new tab so the reader keeps the page they were on, and it
+// tells the page that frames it how tall it is.
+func (s *Server) handleRepliesFrame(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if len(id) != 64 || strings.Trim(id, "0123456789abcdef") != "" {
+		s.webError(w, r, http.StatusNotFound, "err.nopost")
+		return
+	}
+	thread, err := s.St.Thread(id, 0)
+	if err != nil {
+		s.webError(w, r, http.StatusInternalServerError, "err.thread")
+		return
+	}
+	rd := webReadingOf(r)
+	root, names := id, map[string]string{}
+	if p, err := s.St.Post(id); err == nil {
+		names[p.ID] = authorLabel(*p)
+		if p.ReplyTo != "" {
+			if top, err := s.St.Root(p.ID); err == nil && top != "" {
+				root = top
+			}
+		}
+	}
+	pages := max((len(thread)+webThreadPage-1)/webThreadPage, 1)
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	page = min(max(page, 1), pages)
+	from, to := (page-1)*webThreadPage, min(page*webThreadPage, len(thread))
+	replies := s.webPosts(rd, thread[from:to])
+	for _, t := range thread {
+		names[t.ID] = authorLabel(t)
+	}
+	onPage := map[string]bool{}
+	for _, t := range thread[from:to] {
+		onPage[t.ID] = true
+	}
+	for i := range replies {
+		replies[i].InThread = true
+		replies[i].ParentName = names[replies[i].ReplyTo]
+		// the reply it answers: in place in this frame, else on the hub's
+		// own thread page, which finds its page
+		if onPage[replies[i].ReplyTo] {
+			replies[i].ParentHref = "#" + replies[i].ReplyTo
+		} else {
+			replies[i].ParentHref = "/p/" + id + rd.with("at", replies[i].ReplyTo)
+		}
+	}
+	d := &webData{
+		Page: "frame", Title: rd.L.T("reply.frame", "host", r.Host), Replies: replies, Count: len(thread),
+		Root: root, Live: s.Events != nil, Lang: rd.Lang, Q: rd.Q,
+	}
+	if pages > 1 {
+		d.Pages, d.From, d.To = pages, from+1, to
+		self := "/p/" + id + "/replies"
+		if page > 1 {
+			d.PrevHref = self + rd.Q
+			if page > 2 {
+				d.PrevHref = self + rd.with("page", strconv.Itoa(page-1))
+			}
+		}
+		if page < pages {
+			d.NextHref = self + rd.with("page", strconv.Itoa(page+1))
+		}
+	}
+	w.Header().Set("X-Robots-Tag", "noindex")
+	s.webRender(w, r, http.StatusOK, d)
+}
+
 // handleProfilePage: a key that has posted but never sent profile.set
 // has no profiles row (the JSON API 404s it), yet its posts exist and
 // the feed links here — so the page stands whenever there are posts,
@@ -1791,6 +1866,10 @@ func (s *Server) handleProfilePage(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case err == nil:
 		d.Profile, d.Count = pr, pr.Posts
+		if d.Invite, err = s.St.InviteOf(pr.ID); err != nil {
+			s.webError(w, r, http.StatusInternalServerError, "err.profile")
+			return
+		}
 		d.Since = time.UnixMilli(pr.Created).UTC().Format("2006-01-02")
 		d.SinceStamp = webStamp(pr.Created)
 		d.Desc = excerpt(pr.Bio, 200)
