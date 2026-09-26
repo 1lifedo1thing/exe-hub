@@ -2700,7 +2700,7 @@ at a reply on its page.
   measures the three heights and tops, the word, and the triangles.
 - **Left**: the JSON API says nothing of summaries yet.
 
-## Replies under a blog post — Planet sites on the hub (hub side built 2026-09-26)
+## Replies under a blog post — Planet sites on the hub (built 2026-09-26)
 
 My idea post `d89824f7` (2026-09-25): publish a Planet post and it
 announces itself on the hub, and the replies it gets here show under the
@@ -2730,7 +2730,10 @@ post) and the replies frame.
     body white with no padding and its `.frame` without border, margin
     or shadow, so the blog's own Replies window is the sunken frame
     around the rows (both draw with exe-stats' chrome.css, so they
-    match); the last row drops its rule against that frame;
+    match); the last row drops its rule against that frame. With no
+    head post above them, the first level of replies stands at the
+    frame's edge on white, a row of the list, and each deeper level steps
+    in from there on the replies' grey, as the thread page steps it;
   - the reader's language as every page picks it (the frame's request
     carries the browser's Accept-Language; `?lang=` wins), Show Original
     included;
@@ -2793,4 +2796,8 @@ post) and the replies frame.
 - **Order.** Invites and the frame first, checked against a scratch hub;
   then exe-planet's template window over a hand-written `hub:` line;
   then the site's key announcing on a scratch daemon; the first live
-  post (Meet exe) on Livid's say.
+  post (Meet exe) on Livid's say. All but the last done 2026-09-26:
+  exe-planet 0.6.0 and Platinum buildNumber 7 carry the other half, and
+  `~/tools/playwright/exe-planet-replies-test.js` runs the whole path on
+  a scratch hub built from this tree (a real gate on a fake RPC, a real
+  wallet signature from a mock Wallet Standard wallet).

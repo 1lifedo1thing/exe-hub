@@ -641,7 +641,11 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
    page has no desk around it. */
 .framed body { padding: 0; background: #fff; }
 .framed .frame { margin: 0; border: 0; box-shadow: none; }
-.framed .post:last-child { border-bottom: 0; }
+/* no head post above them here, so the first level stands at the
+   frame's edge on white, a row of the list, and each deeper level steps
+   in from there as the thread page steps it */
+.framed .post.reply { padding-left: min(calc(12px + (var(--d, 1) - 1) * 22px), 40%); }
+.framed .post.reply:not(.deep) { background: #fff; }
 </style>
 {{if eq .Page "stats"}}{{template "statscss"}}{{end}}</head>
 <body>
