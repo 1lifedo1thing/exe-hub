@@ -338,9 +338,8 @@ launch mint is `9raU…pump` (6 decimals); the initial threshold is
     reasons bans left it: no reload, an audit trail, and no hand edit on
     the host and in the VM for every key.
   - Later: a Hub app window listing invites, with Invite… and Remove for
-    an admin. Claude's key sits in `admins` only to skip the gate; an
-    invite would drop its ban, peer and page powers, but add the cooldown
-    the hub agent may hit when it answers fast — Livid's call.
+    an admin. Claude's key stays in `admins`, not invited (Livid,
+    2026-09-26): with more users and spam it may moderate.
 - Future escape hatch (not v1, but the envelope must not preclude it):
   `profile.set` may later carry a separate Solana address plus that
   address's signature over the author pubkey, so holdings can sit in a
@@ -2727,27 +2726,48 @@ post) and the replies frame.
     h}` by `postMessage` from a ResizeObserver; the page that frames it
     trusts only its own frame's window and the hub's origin;
   - every link opens in the top window (`<base target="_top">`);
+  - the Reply link under each reply, shown when the page says a reader
+    is signed in (`{hub: "signed-in", on}` from `window.parent`; the
+    message grants nothing, so any origin may send it), sends `{hub:
+    "aim", id, name, words}` up instead of aiming a composer here: the
+    composer is the blog page's (below);
   - a whole id this hub does not hold (yet) answers the empty state, not
     404, and stays live: a reply may name a root that arrives later;
   - counted by stats as its own lane, `frame`, not `thread`.
   The hub sends no frame headers today, so any page may frame it; the
   frame changes nothing else on the thread page.
-- **Answering from a blog.** First version: the blog's Replies window
-  has a Reply on Hub… button that opens `/p/{id}` in a tab, where the
-  wallet composer works; back on the blog, the reply is already there.
-  No composer inside the frame yet: whether wallet extensions inject into
-  a cross-origin frame is unverified (see Posting from a wallet). A
-  commenter needs what any poster here needs, the token gate. The plan
-  keeps it (it is the hub's spam filter and gives every commenter an
-  identity); open replies on announced threads would change the gate's
-  policy and are Livid's call, still open.
+- **Answering from a blog** (Livid, 2026-09-26). A commenter is a
+  holder: the token gate, 10,000 $V2EX, as for any poster here, with no
+  exception for announced threads. The composer is on the same page as
+  the post:
+  - **At the blog page's top level, not in the frame.** Phantom injects
+    its provider into no iframe (its developer FAQ) and into no http
+    page; a composer in the frame would find no wallet. The top level of
+    an https page is the one place every wallet reaches.
+  - **It talks to this hub directly** — `GET /v1/gate?author=`, `GET
+    /v1/seq`, the wallet's `signMessage` over `exe-hub:v1\n` and the
+    envelope, `POST /v1/msg` — all open to any origin already (`cors()`
+    allows POST and the `X-Hub-*` headers), so posting needs no hub
+    change. `reply_to` is the thread's root, or the reply the frame
+    aimed. The reply then reaches the frame live, as any reply does.
+  - **Its code is the template's, not a script this hub serves.** A
+    script served from here into the blog page could, were the hub ever
+    compromised, ask the reader's wallet to sign anything, a transaction
+    included; the template's copy is fixed per build and, on IPFS,
+    content-addressed. The cost is a second copy of the wallet posting
+    code beside web.html's compose script; the envelope it signs is the
+    frozen `exe-hub:v1`, and the wallet harness's mock wallets test both.
+  - A commenter with no profile shows as an identicon and id, as here;
+    naming oneself from the blog is later (exe-planet's plan).
 - **Tests.** Go: `TestInvites` (set, lift, a non-admin's refused, ban
   beats invite, cooldown kept, a rebuild keeps them, the gate verdict)
   and `TestWebRepliesFrame` (replies only, no chrome, an unknown whole
-  id's empty state, `_top`, the language rule). Playwright: a page on
-  another origin frames a scratch hub's thread, checks the height
-  messages grow the frame, and posts a reply that slides in live. Both
-  hubs deploy before it is called done.
+  id's empty state, `_top`, the language rule, Reply links only after
+  the signed-in message). Playwright: a page on another origin frames a
+  scratch hub's thread, checks the height messages grow the frame, that
+  a Reply link sends its aim up, and that a reply posted from the page by
+  a mock wallet slides in live. Both hubs deploy before it is called
+  done.
 - **Order.** Invites and the frame first, checked against a scratch hub;
   then exe-planet's template window over a hand-written `hub:` line;
   then the site's key announcing on a scratch daemon; the first live
