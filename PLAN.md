@@ -224,6 +224,9 @@ Envelope: `{type, author (pubkey b64), seq, ts, body}`.
 - `ban.set` / `ban.lift` — admin-only (author must be a config-assigned
   admin): ban or unban a target pubkey, with an optional reason on
   `ban.set`.
+- `invite.set` / `invite.lift` — admin-only, planned 2026-09-26: invite
+  or uninvite a target pubkey, with an optional note on `invite.set`; an
+  invited key passes the token gate (see Invites, under Who may post).
 - No `post.edit` in v1.
 - A mention is not an op: it is `@` and a profile id in a post's text
   (see Mentions).
@@ -235,7 +238,7 @@ feed ordering uses hub receive time.
 ## Storage (SQLite, WAL mode)
 
 - `messages` — append-only log of raw signed envelopes. **Source of truth.**
-- `profiles`, `posts`, `embeds`, `pins`, `bans` — derived indexes,
+- `profiles`, `posts`, `embeds`, `pins`, `bans` (and `invites`, planned) — derived indexes,
   rebuildable by replaying `messages`. Schema changes to derived tables
   never lose data.
 - Feed queries use keyset pagination (`before=<id>`), never OFFSET.
@@ -310,6 +313,34 @@ launch mint is `9raU…pump` (6 decimals); the initial threshold is
   Like the token gate it is not retroactive: existing posts stay, and the
   banned author may still `post.delete` their own posts. (Admin deletion
   of others' posts is a separate power, deliberately not in v1.)
+- **Invites — a key let past the gate by an admin (planned 2026-09-26,
+  with Livid).** The positive mirror of bans: signed `invite.set` /
+  `invite.lift` from a config admin, in the log, materialized in a
+  derived `invites` table (target pubkey, inviting admin, note, time),
+  so an invite applies without a reload, has a history, and survives a
+  rebuild. Livid's frame: not a vouch for one kind of key but a list of
+  invited, trusted keys — a Planet site's key (see Replies under a blog
+  post), a guest writer who holds no $V2EX, another exe node.
+  - The target is the **whole pubkey**, as `ban.set` takes, never the
+    16-hex id: an id is 64 bits of a hash, and a key ground to match an
+    invited id must not pass. Pages still show the id and the name.
+  - An invite grants **passing the token gate and nothing else**: the
+    cooldown still applies (only admins skip it), a ban beats an invite,
+    and an invited key has no admin power. Lifting one puts the key back
+    under the gate, which it may still pass by what it holds. Neither op
+    touches posts already made.
+  - **Per hub, like bans.** It matters only on the hub where a key's
+    posts arrive: replicated content skips the gate already.
+  - **Visible.** `GET /v1/gate` answers `invited`, and the profile page
+    and the Hub app's profile say "Invited by <admin's name>", so a reader
+    sees why an account holding nothing posts here.
+  - Not in config (an `invited: [...]` list beside `admins`) for the
+    reasons bans left it: no reload, an audit trail, and no hand edit on
+    the host and in the VM for every key.
+  - Later: a Hub app window listing invites, with Invite… and Remove for
+    an admin. Claude's key sits in `admins` only to skip the gate; an
+    invite would drop its ban, peer and page powers, but add the cooldown
+    the hub agent may hit when it answers fast — Livid's call.
 - Future escape hatch (not v1, but the envelope must not preclude it):
   `profile.set` may later carry a separate Solana address plus that
   address's signature over the author pubkey, so holdings can sit in a
@@ -388,7 +419,7 @@ launch mint is `9raU…pump` (6 decimals); the initial threshold is
 - `GET  /v1/gate?author=<pubkey b64>` — whether that key may post here
   now, before it signs anything: `{profile, mode, gate, banned,
   cooldown, wait, mints}`, where `gate` is `open`, `admin`, `pass`,
-  `below` or `unavailable`, `wait` the cooldown's seconds left and
+  `below` or `unavailable` (and `invited`, planned: see Invites), `wait` the cooldown's seconds left and
   `mints` the thresholds as the join block shows them, each with `held`,
   what the key holds in the same units (absent when the check did not
   read that mint). The gate's cache keeps the balances a check read
@@ -2657,3 +2688,67 @@ at a reply on its page.
   for Weather and Blue Pencil (not this hub's tree). The browser check
   measures the three heights and tops, the word, and the triangles.
 - **Left**: the JSON API says nothing of summaries yet.
+
+## Replies under a blog post — Planet sites on the hub (planned 2026-09-26)
+
+My idea post `d89824f7` (2026-09-25): publish a Planet post and it
+announces itself on the hub, and the replies it gets here show under the
+post on the blog; a reader of blog.v2core.com cannot answer today.
+Worked out with Livid 2026-09-26; exe-planet's PLAN.md, "Replies from
+the hub", holds that side (the site's key, the announcement, the
+template). The hub's part is two pieces: invites (above, under Who may
+post) and the replies frame.
+
+- **The site is an author.** Every exe-planet site has one ed25519 key,
+  which is at once its IPNS name, its hub author and its Solana address
+  (a Solana address is the raw key, as the gate already relies on). The
+  site signs its own `profile.set` (its title, its `avatar.png` minted by
+  this hub's `POST /v1/avatar`, its about and address as the bio) and
+  one `post.create` per blog post, so `/u/<site id>` is the blog's feed
+  here. Its address holds no $V2EX; an admin's `invite.set` lets it past
+  the gate. No new op for a site: it is a key like any other.
+- **One hub per site.** A site posts to the hub its readers load, so the
+  post is there when the page first frames it, and the invite is needed
+  on that hub alone; peering carries the post to the other within a pull.
+- **`GET /p/{id}/replies` — the replies frame.** Not `/embed/`: an embed
+  here is a post's attachment (`embeds`, `/v1/embed/{cid}`). The thread
+  page with a frame flag in web.html:
+  - the replies only (the blog shows the article itself), paged as the
+    thread page pages them, the pager inside the frame;
+  - no desk, menu bar or window chrome, and a transparent body, so the
+    blog's own Replies window is the frame around them (both draw with
+    exe-stats' chrome.css, so the rows match);
+  - the reader's language as every page picks it (the frame's request
+    carries the browser's Accept-Language; `?lang=` wins), Show Original
+    included;
+  - live over `/v1/events` as a thread page is, so a reply made on the
+    hub slides into the blog without a reload;
+  - its height sent to the parent whenever it changes, `{hub: "height",
+    h}` by `postMessage` from a ResizeObserver; the page that frames it
+    trusts only its own frame's window and the hub's origin;
+  - every link opens in the top window (`<base target="_top">`);
+  - a whole id this hub does not hold (yet) answers the empty state, not
+    404, and stays live: a reply may name a root that arrives later;
+  - counted by stats as its own lane, `frame`, not `thread`.
+  The hub sends no frame headers today, so any page may frame it; the
+  frame changes nothing else on the thread page.
+- **Answering from a blog.** First version: the blog's Replies window
+  has a Reply on Hub… button that opens `/p/{id}` in a tab, where the
+  wallet composer works; back on the blog, the reply is already there.
+  No composer inside the frame yet: whether wallet extensions inject into
+  a cross-origin frame is unverified (see Posting from a wallet). A
+  commenter needs what any poster here needs, the token gate. The plan
+  keeps it (it is the hub's spam filter and gives every commenter an
+  identity); open replies on announced threads would change the gate's
+  policy and are Livid's call, still open.
+- **Tests.** Go: `TestInvites` (set, lift, a non-admin's refused, ban
+  beats invite, cooldown kept, a rebuild keeps them, the gate verdict)
+  and `TestWebRepliesFrame` (replies only, no chrome, an unknown whole
+  id's empty state, `_top`, the language rule). Playwright: a page on
+  another origin frames a scratch hub's thread, checks the height
+  messages grow the frame, and posts a reply that slides in live. Both
+  hubs deploy before it is called done.
+- **Order.** Invites and the frame first, checked against a scratch hub;
+  then exe-planet's template window over a hand-written `hub:` line;
+  then the site's key announcing on a scratch daemon; the first live
+  post (Meet exe) on Livid's say.
