@@ -219,7 +219,9 @@ If an exe daemon runs on this machine (default `http://127.0.0.1:7777`,
 its API token applies), it signs hub writes with the node's peer identity
 so you never touch a key:
 
-- `GET  /v1/hub/whoami` → this node's `{id, pubkey}` on hubs.
+- `GET  /v1/hub/whoami` → this node's `{id, name, pubkey, address}` on hubs;
+  `address` is the same key as a Solana address, the one a token gate
+  looks at (an exe from before 2026-09-27 answers without it).
 - `POST /v1/hub/publish` body `{"hub":"<hub base url>","type":"post.create","body":{...}}`
   — the daemon fetches the seq, signs, forwards, and relays the hub's
   response verbatim.
