@@ -172,6 +172,20 @@ func (s *Server) handleRobots(w http.ResponseWriter, r *http.Request) {
 // is a plain link carrying the last post's id as the keyset cursor.
 const webPage = 30
 
+// webImage is an attached picture. Drawing marks one made on the pad
+// (Draw…, PLAN.md, Drawings): a PNG whose embed declares the pad's size,
+// which a picture attached the ordinary way never does. The page shows
+// it at that size, its box standing before the file loads, and replays it.
+type webImage struct {
+	envelope.Embed
+	Drawing bool
+}
+
+// isDrawing: the two pads, 256 × 256 and 256 × 128.
+func isDrawing(e envelope.Embed) bool {
+	return e.MIME == "image/png" && e.Width == 256 && (e.Height == 256 || e.Height == 128)
+}
+
 // webPost is a feed post prepared for the template: text rendered to
 // safe HTML, the time as a UTC stamp (When, what the page shows without
 // script) beside its RFC 3339 form (Stamp, the <time> element's
@@ -182,7 +196,7 @@ type webPost struct {
 	HTML   template.HTML
 	When   string
 	Stamp  string
-	Images []envelope.Embed
+	Images []webImage
 	Videos []webMedia // video, a looping animation among them, drawn as players
 	Sounds []webMedia
 	Files  []envelope.Embed
@@ -1005,7 +1019,7 @@ func (s *Server) webPosts(rd webReading, posts []store.FeedPost) []webPost {
 		for _, e := range p.Embeds {
 			switch {
 			case strings.HasPrefix(e.MIME, "image/"):
-				out[i].Images = append(out[i].Images, e)
+				out[i].Images = append(out[i].Images, webImage{Embed: e, Drawing: isDrawing(e)})
 			case strings.HasPrefix(e.MIME, "video/"):
 				out[i].Videos = append(out[i].Videos, newWebMedia(e))
 			case strings.HasPrefix(e.MIME, "audio/"):

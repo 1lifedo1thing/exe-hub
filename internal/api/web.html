@@ -530,6 +530,21 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
    by the hub, see PLAN.md, Linked pictures), drawn alike */
 .embeds img { max-width: 100%; max-height: 420px; border: 1px solid #262626; display: block; margin-top: 8px; }
 .embeds .file { display: block; margin-top: 6px; }
+/* a drawing (the Hub app's Draw…, and the pad here): the pad's own
+   pixels. Its embed declares the pad's size, so the box stands before
+   the picture loads, and drawFit gives a pad pixel a whole number of
+   device pixels (two at 150 percent). The box is content-box, so the
+   border is not taken out of the picture. Without script the picture in
+   the noscript stands in the same box, and the one the script would
+   have played is put away. */
+.embeds .drawing { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; margin-top: 8px; }
+.embeds .drawing .pic { display: block; }
+.embeds img.draw { box-sizing: content-box; max-width: none; max-height: none; margin-top: 0;
+  image-rendering: pixelated; background: #fff; }
+.embeds noscript img.draw { max-width: calc(100% - 2px); height: auto; }
+/* and under it, at its left edge, the small button that draws it again:
+   there with the post, so nothing moves when the picture comes */
+.embeds .again { min-width: 0; height: auto; padding: 1px 8px; font-size: 10px; font-family: inherit; cursor: default; margin: 0; }
 /* a video: its box has the final size before the file loads (web.go sets
    width and aspect-ratio from the embed), black behind the frame */
 .embeds .vid { margin-top: 8px; max-width: 100%; border: 1px solid #262626; background: #000; }
@@ -609,6 +624,7 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 .viewer .titlebar { cursor: default; user-select: none; touch-action: none; }
 .viewer .tbox.close { cursor: default; }
 .viewer img { display: block; max-width: calc(100svw - 40px); max-height: calc(100svh - 90px); }
+.viewer img.draw { image-rendering: pixelated; background: #fff; }
 /* the page window: the same chrome around a sandboxed frame, sized to
    the viewport; its zoom box fills the viewport and back. Its title bar
    stays the chrome's flex bar: as a grid, the title's max-width: 70%
@@ -647,7 +663,8 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 .framed .post.reply { padding-left: min(calc(12px + (var(--d, 1) - 1) * 22px), 40%); }
 .framed .post.reply:not(.deep) { background: #fff; }
 </style>
-{{if eq .Page "stats"}}{{template "statscss"}}{{end}}</head>
+{{if eq .Page "stats"}}{{template "statscss"}}{{end}}<noscript><style>.embeds .pic > img.draw { display: none; }</style></noscript>
+</head>
 <body>
 {{if eq .Page "home"}}
 <div class="desk">
@@ -831,6 +848,7 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
     next.forEach((n, i) => { if (feed.children[i] !== n) feed.insertBefore(n, feed.children[i] || null); });
     // the new posts' times, and a kept post whose day ended since
     localTimes(feed);
+    drawings(feed);
     // the phone's in-feed summary follows its button: a newer step brought in while it was open stays open
     { const sp = document.getElementById("spark"), sf = document.getElementById("sumfeed"); if (sp && sf) sf.classList.toggle("open", sp.getAttribute("aria-pressed") === "true"); }
     if (pin) scrollBy({ top: pin.getBoundingClientRect().top - at, behavior: "instant" });
@@ -954,6 +972,84 @@ function localTimes(root) {
   }
 }
 localTimes(document);
+</script>
+<script>
+// A drawing (PLAN.md, Drawings): an animated PNG that replays the pad
+// once as it loads, made by Draw… here and in the exe Hub app, whose
+// feed shows it the same way (sysapps/hub index.html, "a drawing":
+// change both). The server marks it (img.draw, the pad's size beside
+// it) and this stands it at that size, a pad pixel a whole number of
+// device pixels, fewer of them where the row is narrower than the pad.
+// A picture tag plays a drawing once and cannot be told to play again,
+// and WebKit keeps a played one as it ended for as long as it holds the
+// file, which the hub serves as immutable: a reload showed the finished
+// pad. So a drawing is never shown by its hub address. It waits, an
+// empty box, until half of it is in view, and is given a blob of its
+// bytes then, a fresh address every time, let go once the picture has
+// it; Replay from Start under it does the same again. The hub address
+// is the way back without IntersectionObserver or when the bytes cannot
+// be fetched, and what a reader without script is shown.
+const drawCss = n => Math.ceil(n * 64 - 1e-6) / 64 + "px"; // layout keeps sixty-fourths and cuts the rest: rounded up to the next
+function drawFit(img, room) {
+  const dpr = window.devicePixelRatio || 1, w = +img.dataset.w, h = +img.dataset.h;
+  let px = Math.max(1, Math.round(dpr));
+  if (room > 0) px = Math.max(1, Math.min(px, Math.floor(room * dpr / w + 1e-6)));
+  img.style.width = drawCss(w * px / dpr);
+  img.style.height = drawCss(h * px / dpr);
+}
+async function drawReplay(img) {
+  if (img.dataset.busy) return;
+  img.dataset.busy = "1";
+  try {
+    const r = await fetch(img.dataset.src);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const url = URL.createObjectURL(await r.blob());
+    const free = () => {
+      URL.revokeObjectURL(url);
+      img.removeEventListener("load", free);
+      img.removeEventListener("error", free);
+    };
+    img.addEventListener("load", free);
+    img.addEventListener("error", free);
+    img.src = url;
+  } catch (e) {
+    img.src = img.dataset.src;
+  }
+  delete img.dataset.busy;
+}
+const drawSeen = typeof IntersectionObserver === "function" ? new IntersectionObserver(entries => {
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    drawSeen.unobserve(e.target);
+    drawReplay(e.target);
+  }
+}, { threshold: 0.5 }) : null;
+const drawRoom = img => { const box = img.closest(".drawing"); return box ? box.clientWidth - 2 : 0; }; // the row, less the border
+// every drawing under root not yet taken up: a live page runs this again
+// over its frame after each swap, for the posts that came in
+function drawings(root) {
+  for (const img of root.querySelectorAll(".drawing .pic > img.draw")) {
+    drawFit(img, drawRoom(img));
+    if (img.dataset.on) continue;
+    img.dataset.on = "1";
+    if (drawSeen) drawSeen.observe(img); else img.src = img.dataset.src;
+  }
+}
+drawings(document);
+addEventListener("resize", () => drawings(document));
+// a move between monitors, or the browser's zoom, changes the density without a resize
+(function watchDensity() {
+  matchMedia("(resolution: " + (window.devicePixelRatio || 1) + "dppx)").addEventListener("change", () => {
+    drawings(document);
+    watchDensity();
+  }, { once: true });
+})();
+// the press stays a press: it opens no viewer and follows no link
+document.addEventListener("click", e => {
+  const b = e.target instanceof Element && e.target.closest(".drawing .again");
+  const img = b && b.closest(".drawing").querySelector(".pic > img.draw");
+  if (img) drawReplay(img);
+});
 </script>
 <script>
 // A translated post's control (PLAN.md, Translations). Both texts are in
@@ -1089,7 +1185,9 @@ document.addEventListener("change", e => {
   // one window a picture (or a page): a second click on one already open
   // raises its window where it is, moved or not, instead of stacking another
   const shown = src => [...document.querySelectorAll(".viewer")].find(w => w.dataset.src === src);
-  const open = (src, name) => {
+  // a drawing (dr, its img in the feed) is shown as the feed shows it,
+  // the pad's pixels, and replays as its window opens
+  const open = (src, name, dr) => {
     const had = shown(src);
     if (had) { front(had); return; }
     const w = document.createElement("div");
@@ -1112,7 +1210,12 @@ document.addEventListener("change", e => {
       w.style.top = Math.max(8, (vh - w.offsetHeight) / 2 + k * 24) + "px";
       w.style.visibility = "visible";
     };
-    img.src = src;
+    if (dr) {
+      img.className = "draw";
+      Object.assign(img.dataset, { src, w: dr.dataset.w, h: dr.dataset.h });
+      drawFit(img, document.documentElement.clientWidth - 40);
+      drawReplay(img);
+    } else img.src = src;
     document.body.append(w);
     front(w);
     w.addEventListener("pointerdown", () => front(w), true);
@@ -1222,7 +1325,7 @@ document.addEventListener("change", e => {
     if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return; // a new tab is still a new tab
     e.preventDefault();
     if (a.classList.contains("page")) openPage(a.href, a.dataset.name, a.dataset.cid);
-    else open(a.href, a.dataset.name);
+    else open(a.href, a.dataset.name, a.querySelector(":scope > img.draw"));
   });
   // /p/{id}#page={cid} opens that page as the thread loads, and a hash typed
   // into the bar afterwards opens (or raises) its page the same way
@@ -2169,7 +2272,7 @@ document.addEventListener("change", e => {
     {{if .Text}}{{with .Tr}}<div class="text" lang="{{.Lang}}"{{if .Orig}} hidden{{end}}>{{.HTML}}</div>{{end}}<div class="text"{{if .Lang}} lang="{{.Lang}}"{{end}}{{if and .Tr (not .Tr.Orig)}} hidden{{end}}>{{.HTML}}</div>{{with .Tr}}<div class="trl"><span{{if .Orig}} hidden{{end}}>{{.Note}} · </span><a class="tro" role="button" href="/p/{{$.ID}}{{if .Orig}}{{$.Q}}{{else}}?lang=orig{{end}}" data-other="{{if .Orig}}{{.Show}}{{else}}{{.Back}}{{end}}">{{if .Orig}}{{.Back}}{{else}}{{.Show}}{{end}}</a></div>{{end}}{{end}}
     {{if .Card}}<div class="card"><a class="cm" href="{{.Card.URL}}" target="_blank" rel="noopener nofollow">{{if .Card.Image}}<span class="ci"><img src="/v1/embed/{{.Card.Image}}" alt="" loading="lazy"></span>{{end}}<span class="cb"><span class="ct">{{.Card.Title}}</span>{{if .Card.Desc}}<span class="cd">{{.Card.Desc}}</span>{{end}}<span class="ch">{{.Card.Host}}</span></span></a>{{if .Card.Archive}}<a class="arch" href="{{.Card.Archive}}" target="_blank" rel="noopener nofollow">{{T "archived"}}{{with .Card.ArchiveDate}} · {{.}}{{end}}</a>{{end}}</div>{{end}}
     {{with .PostCard}}<div class="card qcard"><a class="cm" href="/p/{{.ID}}{{$.Q}}">{{if .Image}}<span class="ci"><img src="/v1/embed/{{.Image}}" alt="" loading="lazy"></span>{{end}}<span class="cb"><span class="qh"><span class="qav">{{if .Avatar}}<img src="/v1/embed/{{.Avatar}}" alt="">{{else}}<img class="idn" src="/v1/identicon/{{.Author}}.svg" alt="">{{end}}</span><b>{{.Name}}</b><span class="mono">{{.Author}}</span><span class="qw">· <time datetime="{{.Stamp}}">{{.When}}</time></span></span>{{if .Text}}<span class="qt">{{.Text}}</span>{{end}}</span></a></div>{{end}}
-    {{if or .Images .Pictures .Videos .Sounds .Files .Pages}}<div class="embeds">{{range .Images}}<a class="pic" href="/v1/embed/{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "picture"}}{{end}}"><img src="/v1/embed/{{.CID}}" alt="{{.Alt}}"></a>{{end}}{{range .Pictures}}<a class="pic" href="/v1/embed/{{.CID}}" data-name="{{.Name}}" title="{{.URL}}"><img src="/v1/embed/{{.CID}}" alt=""></a>{{end}}{{range .Videos}}<div class="vid"{{if .Loop}} data-loop{{end}} style="{{.Box}}"><video src="/v1/embed/{{.CID}}"{{if .Poster}} poster="/v1/embed/{{.Poster}}"{{end}}{{if .Loop}} autoplay loop muted playsinline preload="auto"{{else}} controls playsinline preload="{{if .Poster}}none{{else}}metadata{{end}}"{{end}}{{if .Alt}} aria-label="{{.Alt}}"{{end}}></video></div>{{end}}{{range .Sounds}}<div class="aud">{{if .Poster}}<img class="wave" src="/v1/embed/{{.Poster}}" alt="">{{end}}<audio controls preload="none" src="/v1/embed/{{.CID}}"></audio><span class="afoot">{{if .Filename}}{{.Filename}}{{else}}{{T "sound"}}{{end}}{{with .Length}} · {{.}}{{end}}</span></div>{{end}}{{range .Pages}}<div><a class="page" href="/v1/embed/{{.CID}}" data-cid="{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "page"}}{{end}}">{{if .Filename}}{{.Filename}}{{else}}{{T "page"}}{{end}}</a><a class="pagedl" href="/v1/embed/{{.CID}}" download>{{T "download"}}</a></div>{{end}}{{range .Files}}<a class="file" href="/v1/embed/{{.CID}}">{{if .Filename}}{{.Filename}}{{else}}{{.CID}}{{end}} ({{.MIME}})</a>{{end}}</div>{{end}}
+    {{if or .Images .Pictures .Videos .Sounds .Files .Pages}}<div class="embeds">{{range .Images}}{{if .Drawing}}<div class="drawing"><a class="pic" href="/v1/embed/{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "picture"}}{{end}}"><img class="draw" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" data-src="/v1/embed/{{.CID}}" data-w="{{.Width}}" data-h="{{.Height}}" style="width:{{.Width}}px;height:{{.Height}}px" alt="{{.Alt}}"><noscript><img class="draw" src="/v1/embed/{{.CID}}" width="{{.Width}}" height="{{.Height}}" loading="lazy" alt=""></noscript></a><button type="button" class="btn again">{{T "replay"}}</button></div>{{else}}<a class="pic" href="/v1/embed/{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "picture"}}{{end}}"><img src="/v1/embed/{{.CID}}" alt="{{.Alt}}"></a>{{end}}{{end}}{{range .Pictures}}<a class="pic" href="/v1/embed/{{.CID}}" data-name="{{.Name}}" title="{{.URL}}"><img src="/v1/embed/{{.CID}}" alt=""></a>{{end}}{{range .Videos}}<div class="vid"{{if .Loop}} data-loop{{end}} style="{{.Box}}"><video src="/v1/embed/{{.CID}}"{{if .Poster}} poster="/v1/embed/{{.Poster}}"{{end}}{{if .Loop}} autoplay loop muted playsinline preload="auto"{{else}} controls playsinline preload="{{if .Poster}}none{{else}}metadata{{end}}"{{end}}{{if .Alt}} aria-label="{{.Alt}}"{{end}}></video></div>{{end}}{{range .Sounds}}<div class="aud">{{if .Poster}}<img class="wave" src="/v1/embed/{{.Poster}}" alt="">{{end}}<audio controls preload="none" src="/v1/embed/{{.CID}}"></audio><span class="afoot">{{if .Filename}}{{.Filename}}{{else}}{{T "sound"}}{{end}}{{with .Length}} · {{.}}{{end}}</span></div>{{end}}{{range .Pages}}<div><a class="page" href="/v1/embed/{{.CID}}" data-cid="{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "page"}}{{end}}">{{if .Filename}}{{.Filename}}{{else}}{{T "page"}}{{end}}</a><a class="pagedl" href="/v1/embed/{{.CID}}" download>{{T "download"}}</a></div>{{end}}{{range .Files}}<a class="file" href="/v1/embed/{{.CID}}">{{if .Filename}}{{.Filename}}{{else}}{{.CID}}{{end}} ({{.MIME}})</a>{{end}}</div>{{end}}
     {{if .InThread}}<div class="foot re"><a class="rlink" role="button" href="/p/{{.ID}}{{.Q}}">{{T "reply"}}</a></div>{{end}}
     {{if and (not .ReplyTo) .Replies}}<div class="foot"><a class="count" href="/p/{{.ID}}{{.Q}}">{{T "replies" "n" .Replies}} ▸</a>{{with .Latest}}<a class="latest" href="{{.Href}}"><b>{{.Name}}</b> {{.Text}}</a>{{end}}</div>{{end}}
   </div>

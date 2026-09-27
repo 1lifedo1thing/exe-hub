@@ -895,6 +895,46 @@ func TestWebPicture(t *testing.T) {
 	}
 }
 
+// TestWebDrawing: a PNG that declares a pad's size is a drawing: its box
+// at that size with the empty picture in it, the hub address kept beside
+// it for the script and inside a noscript for a reader without one, and
+// Replay from Start under it in the page's language. A PNG of any other
+// size, or one that declares none, stays a picture.
+func TestWebDrawing(t *testing.T) {
+	s := testServer(t, &config.Config{Gate: config.Gate{Mode: "open"}})
+	const pad, shot = "bafybeipad", "bafybeishot"
+	for _, cid := range []string{pad, shot} {
+		if err := s.St.AddPin(cid, 1234, "image/png", false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	ingest(t, s, priv, pub, 1, "post.create", map[string]any{"text": "a cat", "embeds": []map[string]any{
+		{"cid": pad, "mime": "image/png", "filename": "drawing.png", "width": 256, "height": 128},
+		{"cid": shot, "mime": "image/png", "filename": "shot.png", "width": 256, "height": 200},
+	}})
+	_, body := get(t, s.Handler(), "/")
+	blank := "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="
+	want := `<div class="drawing"><a class="pic" href="/v1/embed/` + pad + `" data-name="drawing.png"><img class="draw" src="` + blank +
+		`" data-src="/v1/embed/` + pad + `" data-w="256" data-h="128" style="width:256px;height:128px" alt="">` +
+		`<noscript><img class="draw" src="/v1/embed/` + pad + `" width="256" height="128" loading="lazy" alt=""></noscript></a>` +
+		`<button type="button" class="btn again">Replay from Start</button></div>` +
+		`<a class="pic" href="/v1/embed/` + shot + `" data-name="shot.png"><img src="/v1/embed/` + shot + `" alt=""></a>`
+	if !strings.Contains(body, want) {
+		t.Errorf("drawing wrong:\n%s", body[strings.Index(body, `<div class="embeds">`):][:900])
+	}
+	for _, js := range []string{`function drawReplay(img)`, `drawings(document);`, `closest(".drawing .again")`} {
+		if !strings.Contains(body, js) {
+			t.Errorf("the page lacks %s", js)
+		}
+	}
+	for lang, words := range map[string]string{"zh": "从头重播", "ja": "最初から再生"} {
+		if _, b := get(t, s.Handler(), "/?lang="+lang); !strings.Contains(b, `class="btn again">`+words+`</button>`) {
+			t.Errorf("%s: the button does not say %s", lang, words)
+		}
+	}
+}
+
 // TestWebMedia: a video is a player in a box of its final size, with its
 // poster and no download until played; a looping animation plays muted
 // without controls; a sound shows its waveform, player, name and length;

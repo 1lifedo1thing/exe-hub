@@ -174,6 +174,7 @@ var webStrings = map[string]map[string]string{
 		"sound":    "Sound",
 		"page":     "Page",
 		"download": "download",
+		"replay":   "Replay from Start", // under a drawing (PLAN.md, Drawings)
 		// the picture and page viewer
 		"close":     "Close",
 		"zoom":      "Zoom",
@@ -323,6 +324,7 @@ var webStrings = map[string]map[string]string{
 		"sound":              "声音",
 		"page":               "页面",
 		"download":           "下载",
+		"replay":             "从头重播",
 		"close":              "关闭",
 		"zoom":               "缩放",
 		"loading":            "正在载入…",
@@ -464,6 +466,7 @@ var webStrings = map[string]map[string]string{
 		"sound":              "音声",
 		"page":               "ページ",
 		"download":           "ダウンロード",
+		"replay":             "最初から再生",
 		"close":              "閉じる",
 		"zoom":               "ズーム",
 		"loading":            "読み込み中…",

@@ -2801,3 +2801,41 @@ post) and the replies frame.
   `~/tools/playwright/exe-planet-replies-test.js` runs the whole path on
   a scratch hub built from this tree (a real gate on a fake RPC, a real
   wallet signature from a mock Wallet Standard wallet).
+
+## Drawings — a pad's picture that replays (display built 2026-09-27)
+
+The exe Hub app's Draw… sends a drawing: one animated PNG that replays
+the pad once, the strokes kept inside it (exe `docs/hub-drawing.md` has
+the format). The hub stores and serves it as any picture, and nothing
+here reads the record. Asked by Livid 2026-09-27: the public pages show
+a drawing as the app does, Replay from Start included, and draw one.
+
+- **Known by its embed.** A drawing is an `image/png` embed that
+  declares `width` 256 and `height` 256 or 128, the two pads; pictures
+  attached the ordinary way declare no size (`isDrawing`, `webImage`).
+- **Shown at the pad's size.** `image-rendering: pixelated`, a pad pixel
+  a whole number of device pixels (two at 150 percent), fewer where the
+  row is narrower than the pad, as on a small phone. The box stands in
+  the served HTML at its final size with the button under it, so nothing
+  moves when the picture comes.
+- **Never shown by its hub address.** WebKit keeps a played picture as
+  it ended for as long as it holds the file, and an embed is served
+  immutable, so a reload showed the finished pad. The picture starts as
+  one clear pixel; when half of it is in view the script fetches the
+  bytes and gives the picture a blob of them, a fresh address every
+  time, let go once loaded. The hub address is the way back without
+  IntersectionObserver or when the fetch fails.
+- **Replay from Start.** The small push button under the drawing, 5px
+  below, at its left edge, in the page's three languages. A press gives
+  the picture a fresh blob; it opens no viewer and follows no link.
+- **The viewer** shows a drawing the same way and replays it as its
+  window opens.
+- **A live page** keeps a drawing in a post the server still sends the
+  same, and takes up the ones a swap brings in (`drawings(feed)`).
+- **Without script** the picture in a `noscript` stands in the same box
+  by its hub address, and the empty one is put away.
+- **Tests.** Go: `TestWebDrawing`. Playwright:
+  `~/tools/playwright/exe-hub-page-draw-test.js` on a scratch hub with a
+  fake kubo, at 1x, 1.5x, 2x and a phone in Chromium, and in WebKit on
+  the search and thread pages (Playwright's WebKit hangs on this hub's
+  home page, with or without drawings).
