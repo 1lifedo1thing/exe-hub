@@ -935,6 +935,32 @@ func TestWebDrawing(t *testing.T) {
 	}
 }
 
+// TestWebDrawPad: the Post and Reply windows carry Draw… left of their
+// button, waiting for a wallet, in the page's language, and the page
+// ships the pad with the app's engine and both signatures' paths.
+func TestWebDrawPad(t *testing.T) {
+	s := testServer(t, &config.Config{Gate: config.Gate{Mode: "open"}})
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	id := ingest(t, s, priv, pub, 1, "post.create", map[string]any{"text": "hello"})
+	for path, words := range map[string][2]string{"/": {"Draw…", "Post"}, "/p/" + id: {"Draw…", "Reply"}, "/?lang=zh": {"画图…", "发帖"}, "/?lang=ja": {"描く…", "投稿"}} {
+		_, body := get(t, s.Handler(), path)
+		want := `<button type="button" class="btn draw-btn" aria-label="` + words[0] + `" disabled><svg class="gl"`
+		end := `<span>` + words[0] + `</span></button><button type="button" class="btn send" disabled>` + words[1] + `</button>`
+		if !strings.Contains(body, want) || !strings.Contains(body, end) {
+			t.Errorf("%s: Draw… is not left of %s", path, words[1])
+		}
+		for _, js := range []string{`const DRAW_KEY = "exe-sketch";`, `async function drawingFile(rec)`, `getJSON("/v1/upload"`, `async function post(embeds, say)`, `"draw.wait.file"`} {
+			if !strings.Contains(body, js) {
+				t.Errorf("%s: the page lacks %s", path, js)
+			}
+		}
+	}
+	// a page nobody posts from carries no pad
+	if _, body := get(t, s.Handler(), "/search?q=hello"); strings.Contains(body, "DRAW_KEY") {
+		t.Error("the search page carries the pad")
+	}
+}
+
 // TestWebMedia: a video is a player in a box of its final size, with its
 // poster and no download until played; a looping animation plays muted
 // without controls; a sound shows its waveform, player, name and length;

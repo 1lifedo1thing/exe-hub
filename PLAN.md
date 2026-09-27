@@ -2802,7 +2802,7 @@ post) and the replies frame.
   a scratch hub built from this tree (a real gate on a fake RPC, a real
   wallet signature from a mock Wallet Standard wallet).
 
-## Drawings — a pad's picture that replays (display built 2026-09-27)
+## Drawings — a pad's picture that replays (built 2026-09-27)
 
 The exe Hub app's Draw… sends a drawing: one animated PNG that replays
 the pad once, the strokes kept inside it (exe `docs/hub-drawing.md` has
@@ -2839,3 +2839,58 @@ a drawing as the app does, Replay from Start included, and draw one.
   fake kubo, at 1x, 1.5x, 2x and a phone in Chromium, and in WebKit on
   the search and thread pages (Playwright's WebKit hangs on this hub's
   home page, with or without drawings).
+
+### The pad — Draw… in the Post and Reply windows
+
+A signed-in wallet draws on the page. The pad, its palettes, the record
+and the file are the Hub app's, copied as they stand (the engine from
+`DRAW_KEY` down to `drawScale` is the app's text: a change to one is a
+change to both).
+
+- **Draw…** stands left of Post (or Reply) in the window's button row,
+  12px from it; on a phone its glyph alone, 8px from it, which leaves the
+  status line its one line. It can be pressed where a post could be sent:
+  signed in, through the gate, not banned.
+- **New Drawing**: the pad, 256 × 256 or 256 × 128, and one of twelve
+  palettes. The pad and palette chosen last are what it opens on
+  (`localStorage` `exe-hub-draw`, a preference; nothing of a drawing is
+  kept in storage). Palette names are names and are not translated.
+- **The pad**: pencil and eraser, thin and thick, Undo (an operation,
+  recorded and replayed), the palette's colours, Cancel and Send. A pad
+  pixel is the largest whole number of device pixels that leaves the
+  panel inside the viewport. Cancel and Escape ask before a drawing is
+  discarded.
+- **Send is two signatures**, and the panel says which the wallet is
+  asking for. The first authorizes the file (`POST /v1/upload`, the
+  upload text a profile picture signs: the time and the file's SHA-256);
+  the second is the post's, by the window's own path (`post`), so the
+  words, the mentions and the reply target go with the drawing. The
+  embed is `{cid, mime: "image/png", filename: "drawing.png", width,
+  height}`, the pad's size.
+- **A drawing needs no words.** The hub takes a post with an embed and
+  no text; Post itself still wants words, having nothing else to send.
+- **A post declined or refused keeps everything**: the panel, the
+  drawing, the words, the reply target and the file the hub already
+  holds. Send again asks for the post alone. A stroke or an Undo after
+  that makes it another drawing, and its file is signed for again
+  (Codex's case, 2026-09-27).
+- **What would stop the post is said before the wallet is asked**: a
+  cooldown still running, words past the limit, a reply that is gone.
+- **A finger's release is a press.** A stroke that ends in a flick
+  leaves Chromium a fling to stop, and the tap that stops it gets no
+  click (seen in phone emulation: Undo after a quick stroke did
+  nothing). The pad's buttons hear the release, wait 80 ms for the
+  click, and take whichever comes; nothing is pressed twice. The app's
+  pad has no such guard yet.
+- **Not solved:** at 125 and 150 percent the pad's outermost device
+  column blends with its frame's border (one column in 1280 at 150
+  percent), as in the app. Moving the frame with the pad, rather than
+  the pad alone, changed nothing.
+- **The veil and dialogs are `dveil` and `ddlg`**, so the Profile
+  dialog's stay the only `.veil` and `.dlg` in the window.
+- **Tests.** `~/tools/playwright/exe-hub-page-pad-test.js`: a scratch
+  hub, a mock Wallet Standard wallet signing with a real key, the file
+  read back chunk by chunk from the fake kubo; mouse strokes at 1x,
+  1.25x, 1.5x and 2x, a finger's flicks on a phone. The wallet harness
+  (`exe-hub-wallet/wallet-e2e.js`) still passes over the shared path.
+  Not tried: a real wallet extension, a real phone.

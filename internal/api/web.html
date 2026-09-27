@@ -340,11 +340,11 @@ a.mention { text-decoration: none; }
    labels, Edit — the secondary action — at the lower left (HIG), and the
    default, OK or Save, rightmost with the ring. It opens only once its
    numbers are in, so it never grows while showing. */
-.compose .veil { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
+.compose .veil, .compose .dveil { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center;
   box-sizing: border-box; padding: 16px; background: rgba(0,0,0,.12); }
-.compose .dlg { box-sizing: border-box; width: 330px; max-width: 100%; padding: 14px 12px 12px; background: #ddd; color: #262626;
+.compose .dlg, .compose .ddlg { box-sizing: border-box; width: 330px; max-width: 100%; padding: 14px 12px 12px; background: #ddd; color: #262626;
   border: 1px solid #262626; box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #999, 2px 2px 0 rgba(0,0,0,.25); }
-.compose .dlg h2 { font-size: 12px; margin: 0 0 10px; }
+.compose .dlg h2, .compose .ddlg h2 { font-size: 12px; margin: 0 0 10px; }
 .compose .irow { display: flex; gap: 8px; margin: 0 0 6px; align-items: baseline; }
 .compose .name-irow { align-items: center; min-height: 20px; }
 /* the picture: the hub's 128px avatar in a 48px box, with Choose
@@ -370,6 +370,77 @@ a.mention { text-decoration: none; }
 .compose .wbtn { display: inline-flex; align-items: center; gap: 5px; }
 .compose .wbtn img { width: 14px; height: 14px; display: block; }
 @media (pointer: coarse) { .compose textarea, .compose input[type=text] { font-size: 16px; } .compose input[type=text] { height: 24px; } }
+/* Draw… (PLAN.md, Drawings): the Hub app's pad, on the page. The button
+   stands left of Post and wears its word; on a phone its glyph alone,
+   which leaves the status line its room. */
+.compose .draw-btn .gl { display: none; width: 13px; height: 13px; shape-rendering: crispEdges; }
+.compose .draw-btn .gl .k { fill: currentColor; }
+.compose .draw-btn .gl .w { fill: #fff; }
+.compose .draw-btn:disabled .gl .w { fill: #ddd; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) { .compose .draw-btn .gl { shape-rendering: geometricPrecision; } }
+@media (max-width: 480px) {
+  .compose .row:has(.draw-btn) { gap: 8px; } /* three things on a phone's row: the status line keeps its one line */
+  .compose .draw-btn { min-width: 0; padding: 2px 8px; display: inline-flex; align-items: center; }
+  .compose .draw-btn span { display: none; }
+  .compose .draw-btn .gl { display: block; }
+}
+/* The panel, on a veil of its own (dveil, its dialogs ddlg: the
+   Profile dialog's veil and dialog stay the only .veil and .dlg in the
+   window, for whatever selects them). It opens on the two choices a
+   drawing is made of, the pad and the palette (a white list, the chosen
+   row inverted like a Finder row), then shows the pad: a white strip of
+   cells at the left, two cells wide, the pad in a sunken frame, Cancel
+   and Send under it. The pad is bitmap art: its canvas is sized to a
+   whole number of device pixels a pad pixel (drawScale). A question or
+   a failure takes the veil's front as an alert and gives it back. */
+.compose .ddlg.draw { width: auto; max-width: none; }
+.compose .ddlg.draw.setup { width: 330px; max-width: 100%; }
+.compose .ddlg.draw .drow { margin: 0 0 8px; display: flex; flex-direction: column; gap: 3px; }
+.compose .ddlg.draw .drow > label { font-size: 11px; }
+.compose .ddlg.draw input[type=radio] { accent-color: #333; margin: 0 5px 0 0; vertical-align: -2px; }
+.compose .dp-sizes { display: flex; gap: 16px; align-items: center; height: 20px; }
+.compose .dp-sizes label { font-size: 12px; }
+.compose .dp-list { background: #fff; border: 1px solid var(--black); box-shadow: -1px -1px 0 var(--g600), 1px 1px 0 #fff; }
+.compose .dp-list:focus { outline: none; }
+.compose .dp-pal { display: flex; align-items: center; gap: 8px; height: 18px; padding: 0 6px; }
+.compose .dp-pal .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compose .dp-pal .sw { display: flex; gap: 1px; flex: none; }
+.compose .dp-pal .sw i { display: block; width: 10px; height: 10px; border: 1px solid #000; }
+.compose .dp-pal.on { background: var(--hl); color: #fff; }
+.compose .dp-work { display: flex; gap: 12px; align-items: flex-start; }
+.compose .dp-side { width: 50px; flex: none; align-self: stretch; background: #fff; border: 1px solid var(--black); display: flex; flex-direction: column; }
+.compose .dp-tools { display: grid; grid-template-columns: 24px 24px; }
+.compose .dp-cell { width: 24px; height: 22px; padding: 0; border: 0; border-radius: 0;
+  border-right: 1px solid var(--black); border-bottom: 1px solid var(--black);
+  display: flex; align-items: center; justify-content: center; background: #fff; color: var(--black);
+  font-weight: bold; font-size: 11px; line-height: 14px; }
+.compose .dp-cell:nth-child(2n) { border-right: 0; }
+.compose .dp-cell.wide { grid-column: span 2; width: 48px; border-right: 0; }
+.compose .dp-cell svg { display: block; fill: currentColor; shape-rendering: crispEdges; }
+.compose .dp-cell .ln { display: block; width: 12px; background: currentColor; }
+.compose .dp-cell.on, .compose .dp-cell.wide:active { background: var(--black); color: #fff; }
+.compose .dp-cell:disabled { color: #999; background: #fff; }
+.compose .dp-sw { display: grid; grid-template-columns: repeat(4, 12px); }
+.compose .dp-sw button { width: 12px; height: 12px; padding: 0; border: 0; border-radius: 0;
+  border-right: 1px solid var(--black); border-bottom: 1px solid var(--black); }
+.compose .dp-sw button:nth-child(4n) { border-right: 0; }
+/* the ink in hand: a black ring inside the swatch, white inside that, so
+   it reads on a dark colour and on a light one */
+.compose .dp-sw button.on { box-shadow: inset 0 0 0 2px #000, inset 0 0 0 3px #fff; }
+.compose .dp-side .fill { flex: 1; min-height: 6px; background: #fff; }
+.compose .dp-pad { flex: none; border: 1px solid var(--black); background: #fff; box-shadow: -1px -1px 0 var(--g600), 1px 1px 0 #fff; }
+.compose .dp-pad canvas { display: block; position: relative; image-rendering: pixelated; cursor: crosshair; touch-action: none; }
+.compose .ddlg.draw .btns { align-items: center; }
+.compose .ddlg.draw .btns .left { font-size: 11px; color: #555; min-width: 0; flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compose .ddlg.ask { width: 330px; }
+.compose .ddlg.ask .a-msg { font-weight: bold; margin: 0 0 6px; overflow-wrap: anywhere; }
+.compose .ddlg.ask .a-detail { font-size: 11px; line-height: 16px; margin: 0; overflow-wrap: anywhere; }
+/* a phone gives the pad every pixel it can: narrower gutters */
+@media (max-width: 480px) {
+  .compose .dveil { padding: 8px; }
+  .compose .ddlg.draw:not(.setup) { padding: 8px; }
+  .compose .ddlg.draw .dp-work { gap: 6px; }
+}
 .post { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; padding: 10px 12px 11px; border-bottom: 1px solid #ddd; }
 .post:last-child { border-bottom: 0; }
 .post.reply { padding-left: 36px; background: #f6f6f6; }
@@ -1487,6 +1558,7 @@ document.addEventListener("change", e => {
   const veil = q(".veil"), pName = q(".p-name"), nameField = q(".name-field"), pHeld = q(".p-held"), pNote = q(".p-note");
   const pEdit = q(".p-edit"), pOk = q(".p-ok"), pCancel = q(".p-cancel"), pSave = q(".p-save");
   const pAva = q(".p-ava img"), pChoose = q(".p-choose"), pFile = q(".p-file");
+  const drawBtn = q(".draw-btn");
   const noteText = note.textContent;
   const enc = new TextEncoder();
   const bytes = s => enc.encode(s).length;
@@ -1616,8 +1688,17 @@ document.addEventListener("change", e => {
     const over = bytes(t) - MAX_TEXT;
     send.disabled = busy || !can || left > 0 || !t || over > 0 || !!(target && target.gone);
     profileBtn.disabled = busy;
+    drawBtn.disabled = busy || !can;
     status.textContent = over > 0 ? T("over", { n: over, max: MAX_TEXT }) : flash || line(left);
     if (left > 0 && !flash) timer = setTimeout(render, 1000);
+  }
+  // why a post cannot go as things stand, in the status line's words; ""
+  // when it can. Words are no part of it: a drawing goes without any.
+  function held() {
+    const v = verdict, left = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+    const over = bytes(text.value.trim()) - MAX_TEXT;
+    if (over > 0) return T("over", { n: over, max: MAX_TEXT });
+    return !v || v.banned || v.gate === "below" || v.gate === "unavailable" || (target && target.gone) || left > 0 ? line(left) : "";
   }
   const tell = s => { flash = s; render(); };
   // a done message stands a moment, then the status line (and a running
@@ -1698,6 +1779,7 @@ document.addEventListener("change", e => {
     root.classList.remove("wallet");
     meAva("");
     closeProfile();
+    closeDraw();
   }
   // the wallet switched accounts or forgot this site
   function watch(w) {
@@ -1977,30 +2059,43 @@ document.addEventListener("change", e => {
       if (target && gone !== !!target.gone) { target.gone = gone; render(); }
     }).observe(head.parentNode, { childList: true });
   }
-  send.addEventListener("click", async () => {
+  // The post as the window stands: the words, the reply it answers, and
+  // what is attached, which is a drawing or nothing. Post sends it, and
+  // so does the pad's Send, so the words, the mentions and the reply
+  // target go with a drawing. A post needs words or an embed (the hub's
+  // rule, envelope.go), so a drawing goes without words too. say shows
+  // the steps where the writer is looking. It answers whether the page
+  // stays: false when it is loading again to show the post.
+  async function post(embeds, say) {
     const t = withIds(text.value.trim());
-    if (!t || busy || !me || (target && target.gone)) return;
     // the post answered is settled now, before the wallet's prompt
     const to = target ? target.id : replyTo;
+    const body = {};
+    if (t) body.text = t;
+    if (embeds) body.embeds = embeds;
+    if (to) body.reply_to = to;
+    const id = await sendOp("post.create", body, say);
+    text.value = "";
+    picked.clear();
+    if (target && target.id === to) { target = null; showTarget(); }
+    if (verdict.cooldown) until = Date.now() + verdict.cooldown * 1000;
+    // a live page brings it in (a reply is landed on); a static one loads again, a thread at the new reply
+    if (!window.hubRefresh) {
+      if (!replyTo) { location.reload(); return false; }
+      const q = new URLSearchParams(location.search); q.delete("page"); q.set("at", id); // the reply's page, found by the server
+      location.href = location.pathname + "?" + q + "#" + id; return false;
+    }
+    flash = "";
+    done(T(replyTo ? "replied" : "posted"));
+    window.hubRefresh(replyTo ? id : "");
+    return true;
+  }
+  send.addEventListener("click", async () => {
+    if (!text.value.trim() || busy || !me || (target && target.gone)) return;
     busy = true;
     render();
     try {
-      const body = { text: t };
-      if (to) body.reply_to = to;
-      const id = await sendOp("post.create", body);
-      text.value = "";
-      picked.clear();
-      if (target && target.id === to) { target = null; showTarget(); }
-      if (verdict.cooldown) until = Date.now() + verdict.cooldown * 1000;
-      // a live page brings it in (a reply is landed on); a static one loads again, a thread at the new reply
-      if (!window.hubRefresh) {
-        if (!replyTo) { location.reload(); return; }
-        const q = new URLSearchParams(location.search); q.delete("page"); q.set("at", id); // the reply's page, found by the server
-        location.href = location.pathname + "?" + q + "#" + id; return;
-      }
-      flash = "";
-      done(T(replyTo ? "replied" : "posted"));
-      window.hubRefresh(replyTo ? id : "");
+      await post(null, tell);
     } catch (e) {
       flash = e.message;
     } finally {
@@ -2157,6 +2252,588 @@ document.addEventListener("change", e => {
     }
   });
 
+  // ---- a drawing (PLAN.md, Drawings) ----
+  // Draw… opens a pad, PictoChat's size, and Send posts what was drawn
+  // with the window's words, to the window's target. What follows, down
+  // to drawScale, is the exe Hub app's as it stands (sysapps/hub
+  // index.html, "a drawing"; the format is exe docs/hub-drawing.md):
+  // change both. A drawing is one picture, an animated PNG:
+  // - the finished pad is the file's default image, kept out of the
+  //   animation, so whatever cannot animate (a link preview, an old
+  //   reader) shows the drawing and not an empty pad;
+  // - the animation replays the drawing once, from the empty pad, and
+  //   stops on the finished one;
+  // - the record rides inside, a zTXt chunk named DRAW_KEY: JSON, version
+  //   1, {v, w, h, palette, ops}. An op is a stroke, [colour, size, x, y,
+  //   x, y, …] in pad pixels, or an undo, [-1], which takes back the
+  //   latest stroke still standing.
+  // Undo is an operation like any other (Livid's rule): everything is
+  // recorded as it happened and replayed as it happened.
+  const DRAW_KEY = "exe-sketch";
+  const DRAW_PADS = [[256, 256], [256, 128]];
+  const DRAW_MAX = 20000;   // what a record holds, in points; an undo weighs DRAW_UNDO of them
+  const DRAW_UNDO = 8;
+  const DRAW_PER = 8;       // points a frame, at the least
+  const DRAW_FRAMES = 200;  // a frame stands 50 ms: no replay passes ten seconds
+  const DRAW_PEN = [1, 3], DRAW_RUB = [3, 9]; // thin and thick, pencil and eraser
+  // The palettes are exe's own, after the way BasePaint gives each day a
+  // few colours and a name. The paper comes first.
+  const DRAW_PALETTES = [
+    { name: "Black & White", colours: ["#ffffff", "#000000"] },
+    { name: "Ink & Seal", colours: ["#f4eedd", "#1c1b20", "#cf3a2b"] },
+    { name: "Blueprint", colours: ["#1f4e9c", "#f4f8ff", "#9cc2f2"] },
+    { name: "Pocket", colours: ["#dfe6b8", "#9fb26a", "#55743f", "#1e2f23"] },
+    { name: "Riso", colours: ["#f6f1e7", "#222026", "#2b5fc7", "#ff5f8f", "#ffd23c"] },
+    { name: "Blackboard", colours: ["#24392f", "#f4f2e8", "#f6dc7a", "#f4a6b7", "#a6d5ef", "#b9e0a6"] },
+    { name: "Neon", colours: ["#0e0c20", "#ffffff", "#ff2f8a", "#12e6ff", "#b8ff3d", "#ffd500"] },
+    { name: "Terracotta", colours: ["#f4e7d1", "#2e3b30", "#5c2f27", "#9d4b33", "#cb7d4c", "#e2bd8d", "#6f7e50"] },
+    { name: "Tide Pool", colours: ["#eef9f5", "#123f5f", "#1b7087", "#2aa6a1", "#6fd0c1", "#bfe9dd", "#f0856c", "#f7caa9"] },
+    { name: "Dusk", colours: ["#fff2d8", "#12122c", "#2c255a", "#5c307b", "#a73e7b", "#e6546b", "#ff8b5e", "#ffc56d"] },
+    { name: "Platinum", colours: ["#ffffff", "#262626", "#808080", "#dddddd", "#333399", "#9999ff", "#ccccff", "#cc3333"] },
+    { name: "Crayon Box", colours: ["#fdfcf6", "#15131f", "#4b4b5f", "#9b9bae", "#8b5b3d", "#e1352f", "#f68b1f", "#fbd432",
+      "#90d53b", "#2f9f45", "#169b9d", "#40b6f1", "#2b5cd8", "#4c30a9", "#9c4ee1", "#f370b4"] },
+  ];
+  let drawing = null; // the drawing in hand: {rec, name, tool, thick, colour, cid}, kept while the page is open
+
+  const drawPoints = op => (op.length - 2) / 2;
+  function drawWeight(ops) {
+    let n = 0;
+    for (const op of ops) n += op[0] < 0 ? DRAW_UNDO : drawPoints(op);
+    return n;
+  }
+  // the strokes still standing once every undo has taken its one back
+  function drawLive(ops) {
+    const live = [];
+    for (const op of ops) { if (op[0] < 0) live.pop(); else live.push(op); }
+    return live;
+  }
+  function drawStamp(pad, w, h, x, y, s, c) {
+    const o = s >> 1;
+    for (let dy = 0; dy < s; dy++) for (let dx = 0; dx < s; dx++) {
+      const px = x - o + dx, py = y - o + dy;
+      if (px >= 0 && py >= 0 && px < w && py < h) pad[py * w + px] = c;
+    }
+  }
+  function drawLine(pad, w, h, x0, y0, x1, y1, s, c) { // Bresenham
+    const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    for (;;) {
+      drawStamp(pad, w, h, x0, y0, s, c);
+      if (x0 === x1 && y0 === y1) return;
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x0 += sx; }
+      if (e2 < dx) { err += dx; y0 += sy; }
+    }
+  }
+  // the stroke's points from..to, the first a stamp, the rest lines from
+  // the point before
+  function drawStroke(pad, w, h, op, from, to) {
+    for (let i = from; i < to; i++) {
+      if (i === 0) drawStamp(pad, w, h, op[2], op[3], op[1], op[0]);
+      else drawLine(pad, w, h, op[2 * i], op[2 * i + 1], op[2 * i + 2], op[2 * i + 3], op[1], op[0]);
+    }
+  }
+  function drawPad(rec) {
+    const pad = new Uint8Array(rec.w * rec.h);
+    for (const op of drawLive(rec.ops)) drawStroke(pad, rec.w, rec.h, op, 0, drawPoints(op));
+    return pad;
+  }
+  // The replay, as frames: the empty pad, then every 50 ms the box of what
+  // changed since the frame before. A long drawing puts more points in a
+  // frame. An undo shows the stroke it takes and then the pad without it,
+  // a frame each, while the count allows; past that it is paced like ink.
+  function drawFrames(rec) {
+    const { w, h, ops } = rec;
+    let points = 0, undos = 0;
+    for (const op of ops) { if (op[0] < 0) undos++; else points += drawPoints(op); }
+    const run = (per, own) => {
+      const frames = [{ x: 0, y: 0, w, h, pix: new Uint8Array(w * h), ticks: 8 }];
+      const shown = new Uint8Array(w * h), pad = new Uint8Array(w * h), live = [];
+      let acc = 0;
+      const flush = () => {
+        acc = 0;
+        let x0 = w, y0 = h, x1 = -1, y1 = -1;
+        for (let y = 0, i = 0; y < h; y++) for (let x = 0; x < w; x++, i++) if (pad[i] !== shown[i]) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          y1 = y;
+        }
+        if (x1 < 0) return;
+        const fw = x1 - x0 + 1, fh = y1 - y0 + 1, pix = new Uint8Array(fw * fh);
+        for (let y = 0; y < fh; y++) {
+          const row = pad.subarray((y0 + y) * w + x0, (y0 + y) * w + x0 + fw);
+          pix.set(row, y * fw);
+          shown.set(row, (y0 + y) * w + x0);
+        }
+        frames.push({ x: x0, y: y0, w: fw, h: fh, pix, ticks: 1 });
+      };
+      for (const op of ops) {
+        if (op[0] < 0) {
+          if (own && acc) flush();
+          live.pop();
+          pad.fill(0);
+          for (const s of live) drawStroke(pad, w, h, s, 0, drawPoints(s));
+          acc += DRAW_UNDO;
+          if (own || acc >= per) flush();
+        } else {
+          live.push(op);
+          for (let i = 0, n = drawPoints(op); i < n; i++) {
+            drawStroke(pad, w, h, op, i, i + 1);
+            if (++acc >= per) flush();
+          }
+        }
+      }
+      flush();
+      return { frames, pad };
+    };
+    let out = run(Math.max(DRAW_PER, Math.ceil(points / (DRAW_FRAMES - 2))), true);
+    if (out.frames.length > DRAW_FRAMES)
+      out = run(Math.max(DRAW_PER, Math.ceil((points + undos * DRAW_UNDO) / (DRAW_FRAMES - 2))), false);
+    return out;
+  }
+
+  // the file: PNG chunks by hand. zlib comes from the browser's
+  // CompressionStream; one without it gets stored blocks, larger and as
+  // good to every reader.
+  const DRAW_CRC = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  function pngChunk(type, ...datas) {
+    const len = datas.reduce((n, d) => n + d.length, 0);
+    const out = new Uint8Array(12 + len), dv = new DataView(out.buffer);
+    dv.setUint32(0, len);
+    for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i);
+    let o = 8;
+    for (const d of datas) { out.set(d, o); o += d.length; }
+    let c = 0xffffffff;
+    for (let i = 4; i < 8 + len; i++) c = DRAW_CRC[(c ^ out[i]) & 255] ^ (c >>> 8);
+    dv.setUint32(8 + len, (c ^ 0xffffffff) >>> 0);
+    return out;
+  }
+  function zlibStored(b) {
+    const n = Math.max(1, Math.ceil(b.length / 65535));
+    const out = new Uint8Array(2 + 5 * n + b.length + 4);
+    out[0] = 0x78; out[1] = 0x01;
+    let o = 2;
+    for (let i = 0; i < n; i++) {
+      const part = b.subarray(i * 65535, (i + 1) * 65535);
+      out[o++] = i === n - 1 ? 1 : 0;
+      out[o++] = part.length & 255; out[o++] = part.length >> 8;
+      out[o++] = ~part.length & 255; out[o++] = (~part.length >> 8) & 255;
+      out.set(part, o); o += part.length;
+    }
+    let a = 1, s = 0;
+    for (let i = 0; i < b.length; i++) { a = (a + b[i]) % 65521; s = (s + a) % 65521; }
+    new DataView(out.buffer).setUint32(o, ((s << 16) | a) >>> 0);
+    return out;
+  }
+  let drawNoStream = false; // a test's switch: write stored blocks though the browser could compress
+  async function zlibOf(bytes) {
+    if (typeof CompressionStream === "function" && !drawNoStream) {
+      try {
+        const s = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate"));
+        return new Uint8Array(await new Response(s).arrayBuffer());
+      } catch (e) {}
+    }
+    return zlibStored(bytes);
+  }
+  // 4-bit indexed scanlines, each behind its filter byte (none)
+  function padRows(pix, w, h) {
+    const rb = (w + 1) >> 1, out = new Uint8Array(h * (1 + rb));
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++)
+      out[y * (1 + rb) + 1 + (x >> 1)] |= pix[y * w + x] << (x & 1 ? 0 : 4);
+    return out;
+  }
+  async function drawingFile(rec) {
+    const { frames, pad } = drawFrames(rec);
+    const u32 = (...v) => {
+      const b = new Uint8Array(4 * v.length), dv = new DataView(b.buffer);
+      v.forEach((n, i) => dv.setUint32(4 * i, n));
+      return b;
+    };
+    const ihdr = new Uint8Array(13);
+    ihdr.set(u32(rec.w, rec.h));
+    ihdr[8] = 4; ihdr[9] = 3; // four bits a pixel, indexed
+    const plte = new Uint8Array(3 * rec.palette.length);
+    rec.palette.forEach((c, i) => {
+      const n = parseInt(c.slice(1), 16);
+      plte[3 * i] = n >> 16; plte[3 * i + 1] = (n >> 8) & 255; plte[3 * i + 2] = n & 255;
+    });
+    const enc = new TextEncoder();
+    const record = { v: 1, w: rec.w, h: rec.h, palette: rec.palette, ops: rec.ops };
+    const [ztext, idat, ...datas] = await Promise.all([zlibOf(enc.encode(JSON.stringify(record))),
+      zlibOf(padRows(pad, rec.w, rec.h)), ...frames.map(f => zlibOf(padRows(f.pix, f.w, f.h)))]);
+    const parts = [Uint8Array.of(137, 80, 78, 71, 13, 10, 26, 10), pngChunk("IHDR", ihdr), pngChunk("PLTE", plte),
+      pngChunk("acTL", u32(frames.length, 1)), // played once
+      pngChunk("zTXt", enc.encode(DRAW_KEY + "\0\0"), ztext),
+      pngChunk("IDAT", idat)]; // no fcTL before it: the default image is no frame
+    let seq = 0;
+    frames.forEach((f, i) => {
+      const fc = new Uint8Array(26), dv = new DataView(fc.buffer);
+      dv.setUint32(0, seq++);
+      dv.setUint32(4, f.w); dv.setUint32(8, f.h); dv.setUint32(12, f.x); dv.setUint32(16, f.y);
+      dv.setUint16(20, f.ticks); dv.setUint16(22, 20); // ticks of 50 ms; dispose none, blend source
+      parts.push(pngChunk("fcTL", fc), pngChunk("fdAT", u32(seq++), datas[i]));
+    });
+    parts.push(pngChunk("IEND"));
+    return new Blob(parts, { type: "image/png" });
+  }
+
+  // A pad pixel is a whole number of device pixels (docs/platinum.md,
+  // bitmap art): the CSS size a pad of n pixels takes when it may fill
+  // `room` CSS pixels at most, and at the least one device pixel each.
+  function drawScale(w, h, roomW, roomH) {
+    const dpr = window.devicePixelRatio || 1;
+    const px = Math.max(1, Math.floor(Math.min(roomW / w, roomH / h) * dpr + 1e-6));
+    return px / dpr;
+  }
+
+  // What the page adds is the wallet. A drawing takes two signatures,
+  // and the panel says which one the wallet is asking for: the first
+  // lets the file be stored (the upload's text: the time and the file's
+  // SHA-256, as a profile picture's), the second is the post's. The file
+  // goes up as it is. A file the hub holds is not sent again, nor signed
+  // for again, while the drawing stays as it was: a post that was
+  // declined or refused leaves the panel, the drawing, the words and the
+  // reply target as they were, and Send asks for the post alone. Nothing
+  // of a drawing is kept in the browser's storage; the pad last chosen
+  // and its palette are, as the choice the panel opens on.
+  const el = (tag, attrs, ...kids) => {
+    const n = document.createElement(tag);
+    for (const k in attrs || {}) n.setAttribute(k, attrs[k]);
+    n.append(...kids);
+    return n;
+  };
+  const btn = (cls, words) => el("button", { type: "button", class: "btn" + (cls ? " " + cls : "") }, words);
+  const dveil = el("div", { class: "dveil", hidden: "" });
+  const ddlg = el("div", { class: "ddlg draw", role: "dialog", "aria-modal": "true", "aria-label": T("draw.new") });
+  const adlg = el("div", { class: "ddlg ask", role: "alertdialog", "aria-modal": "true", hidden: "" });
+  dveil.append(ddlg, adlg);
+  box.append(dveil);
+  let drawKeys = null, drawRefit = null, asked = null; // the open panel's keys and fit; the question on the veil
+  function drawDialog(kids, setup, keys) {
+    ddlg.className = "ddlg draw" + (setup ? " setup" : "");
+    ddlg.replaceChildren(...kids);
+    ddlg.hidden = false;
+    dveil.hidden = false;
+    drawKeys = keys;
+    return () => { dveil.hidden = true; ddlg.replaceChildren(); drawKeys = drawRefit = null; drawBtn.focus(); };
+  }
+  // an alert over the panel: the bold line and the words under it, OK;
+  // given an action it asks, Cancel left of the action's button, and is
+  // true for that button or Return alone
+  function ask(message, detail, action) {
+    return new Promise(res => {
+      const ok = btn("default", action || T("ok")), no = btn("", T("cancel"));
+      const answer = yes => { asked = null; adlg.hidden = true; adlg.replaceChildren(); ddlg.hidden = false; res(yes); };
+      ok.onclick = () => answer(true);
+      no.onclick = () => answer(false);
+      adlg.replaceChildren(el("p", { class: "a-msg" }, message), el("p", { class: "a-detail" }, detail || ""),
+        el("div", { class: "btns" }, ...(action ? [no, ok] : [ok])));
+      asked = answer;
+      ddlg.hidden = true;
+      adlg.hidden = false;
+      ok.focus();
+    });
+  }
+  document.addEventListener("keydown", e => {
+    if (dveil.hidden) return;
+    if (e.key === "Tab") { // a modal: Tab stays inside
+      const f = [...dveil.querySelectorAll("button, input, [tabindex]")].filter(n => !n.disabled && n.offsetParent);
+      const i = f.indexOf(document.activeElement);
+      e.preventDefault();
+      if (f.length) f[i < 0 ? 0 : (i + (e.shiftKey ? f.length - 1 : 1)) % f.length].focus();
+    } else if (asked) {
+      if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); asked(e.key === "Enter"); }
+    } else if (drawKeys) drawKeys(e);
+  }, true);
+  // the wallet signed out or switched under an open panel: the panel goes, the drawing stays in hand
+  function closeDraw() {
+    if (dveil.hidden) return;
+    if (asked) asked(false);
+    dveil.hidden = true;
+    ddlg.replaceChildren();
+    drawKeys = drawRefit = null;
+  }
+  const drawLast = () => { try { return JSON.parse(localStorage.getItem("exe-hub-draw") || "{}") || {}; } catch (e) { return {}; } };
+  drawBtn.addEventListener("click", () => {
+    if (!me || busy) return;
+    if (drawing) drawPanel(); else drawSetup();
+  });
+
+  // the two choices a drawing starts from
+  function drawSetup() {
+    const last = drawLast();
+    let pad = DRAW_PADS.findIndex(p => p[1] === last.h);
+    let pal = DRAW_PALETTES.findIndex(p => p.name === last.palette);
+    if (pad < 0) pad = 0;
+    if (pal < 0) pal = 0;
+    const sizes = el("div", { class: "dp-sizes" });
+    DRAW_PADS.forEach((p, i) => {
+      const r = el("input", { type: "radio", name: "dp-size", value: String(i) });
+      r.checked = i === pad;
+      r.onchange = () => { pad = i; };
+      sizes.append(el("label", {}, r, p[0] + " \u00d7 " + p[1]));
+    });
+    const list = el("div", { class: "dp-list", role: "listbox", tabindex: "0", "aria-label": T("draw.palette") });
+    const go = btn("default", T("draw.go")), cancel = btn("", T("cancel"));
+    const rows = DRAW_PALETTES.map((p, i) => {
+      const sw = el("span", { class: "sw" });
+      for (const c of p.colours) sw.append(el("i", { style: "background:" + c }));
+      const row = el("div", { class: "dp-pal", role: "option" }, el("span", { class: "nm" }, p.name), sw);
+      row.onpointerdown = () => pick(i);
+      row.ondblclick = () => go.click();
+      return row;
+    });
+    const pick = i => {
+      pal = i;
+      rows.forEach((r, k) => { r.classList.toggle("on", k === i); r.setAttribute("aria-selected", k === i ? "true" : "false"); });
+    };
+    list.append(...rows);
+    pick(pal);
+    const close = drawDialog([
+      el("h2", {}, T("draw.new")),
+      el("div", { class: "drow" }, el("label", {}, T("draw.pad")), sizes),
+      el("div", { class: "drow" }, el("label", {}, T("draw.palette")), list),
+      el("div", { class: "btns" }, cancel, go)], true, e => {
+      if (e.key === "Escape") { e.preventDefault(); cancel.click(); }
+      else if (e.key === "Enter") { e.preventDefault(); go.click(); }
+      else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        pick(Math.max(0, Math.min(rows.length - 1, pal + (e.key === "ArrowDown" ? 1 : -1))));
+      }
+    });
+    list.focus();
+    cancel.onclick = close;
+    go.onclick = () => {
+      const [w, h] = DRAW_PADS[pad], p = DRAW_PALETTES[pal];
+      try { localStorage.setItem("exe-hub-draw", JSON.stringify({ h, palette: p.name })); } catch (e) {}
+      drawing = { rec: { v: 1, w, h, palette: p.colours.slice(), ops: [] }, name: p.name, tool: "pen", thick: false, colour: 1, cid: "" };
+      close();
+      drawPanel();
+    };
+  }
+
+  // the pad
+  function drawPanel() {
+    const d = drawing, rec = d.rec, { w, h } = rec;
+    let pad = drawPad(rec), weight = drawWeight(rec.ops), stroke = null, sending = false, said = "";
+    const cv = el("canvas", { width: String(w), height: String(h) });
+    const ctx = cv.getContext("2d");
+    const img = ctx.createImageData(w, h);
+    const rgb = rec.palette.map(c => parseInt(c.slice(1), 16));
+    const paint = () => {
+      const px = img.data;
+      for (let i = 0, o = 0; i < pad.length; i++, o += 4) {
+        const n = rgb[pad[i]];
+        px[o] = n >> 16; px[o + 1] = (n >> 8) & 255; px[o + 2] = n & 255; px[o + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+    };
+    const G = {
+      pen: '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M6 1h4v1H6zM5 2h1v2H5zM10 2h1v1h-1zM9 3h1v2H9zM4 4h1v2H4zM8 5h1v2H8zM3 6h1v2H3zM7 7h1v2H7zM2 8h1v2H2zM6 9h1v2H6zM1 10h1v2H1zM5 11h1v1H5zM1 12h4v1H1zM1 13h3v1H1zM1 14h2v1H1z"/></svg>',
+      rub: '<svg width="16" height="16" viewBox="0 0 16 16"><path d="M6 4h7v1H6zM5 5h1v1H5zM12 5h1v1h-1zM4 6h1v1H4zM12 6h1v1h-1zM3 7h1v4H3zM12 7h1v1h-1zM11 7h1v5h-1zM4 11h7v1H4zM3 11h1v1H3zM4 7h7v4H4z"/></svg>',
+    };
+    const cell = (label, html) => {
+      const b = el("button", { type: "button", class: "dp-cell", "aria-label": label, title: label });
+      b.innerHTML = html;
+      return b;
+    };
+    // A press: a click, or a finger's release that no click follows. A
+    // stroke that ends in a flick, the finger lifted while still moving,
+    // leaves the browser a fling to stop, and the tap that stops it gets
+    // no click (seen in Chromium's phone emulation: a tap on Undo after
+    // a quick stroke did nothing). So a button here hears the finger's
+    // release on it and waits a moment for the click; the click, when it
+    // comes, is the press, and nothing is pressed twice. The wait is
+    // also why nothing under the finger changes before the click is
+    // aimed: a question put there at once could take it for its answer.
+    const hit = (b, fn) => {
+      let timer = 0;
+      b.addEventListener("pointerup", e => {
+        if (e.pointerType !== "touch" || b.disabled) return;
+        const at = document.elementFromPoint(e.clientX, e.clientY);
+        if (!at || !b.contains(at)) return; // the finger slid off it
+        clearTimeout(timer);
+        timer = setTimeout(() => { timer = 0; fn(); }, 80);
+      });
+      b.addEventListener("click", () => { clearTimeout(timer); timer = 0; fn(); });
+    };
+    const pen = cell(T("draw.pencil"), G.pen), rub = cell(T("draw.eraser"), G.rub);
+    const thin = cell(T("draw.thin"), '<span class="ln" style="height:1px"></span>');
+    const thick = cell(T("draw.thick"), '<span class="ln" style="height:3px"></span>');
+    const undo = el("button", { type: "button", class: "dp-cell wide" }, T("draw.undo"));
+    const sws = rec.palette.map((c, i) => {
+      const b = el("button", { type: "button", style: "background:" + c, "aria-label": T("draw.colour", { n: i + 1 }) });
+      hit(b, () => { d.colour = i; d.tool = "pen"; show(); });
+      return b;
+    });
+    const side = el("div", { class: "dp-side" }, el("div", { class: "dp-tools" }, pen, rub, thin, thick, undo),
+      el("div", { class: "dp-sw" }, ...sws), el("div", { class: "fill" }));
+    const note = el("span", { class: "left" });
+    const sendB = btn("default", T("draw.send")), cancel = btn("", T("cancel"));
+    const full = () => weight >= DRAW_MAX;
+    const show = () => {
+      pen.classList.toggle("on", d.tool === "pen");
+      rub.classList.toggle("on", d.tool === "rub");
+      thin.classList.toggle("on", !d.thick);
+      thick.classList.toggle("on", d.thick);
+      sws.forEach((b, i) => b.classList.toggle("on", d.tool === "pen" && i === d.colour));
+      undo.disabled = sending || !drawLive(rec.ops).length || weight + DRAW_UNDO > DRAW_MAX;
+      sendB.disabled = sending || !rec.ops.length;
+      cancel.disabled = sending;
+      note.textContent = sending ? said : full() ? T("draw.full") : w + " \u00d7 " + h + " \u00b7 " + d.name;
+      note.title = note.textContent;
+    };
+    const say = t => { said = t; show(); };
+    hit(pen, () => { d.tool = "pen"; show(); });
+    hit(rub, () => { d.tool = "rub"; show(); });
+    hit(thin, () => { d.thick = false; show(); });
+    hit(thick, () => { d.thick = true; show(); });
+    const changed = () => { d.cid = ""; show(); }; // the file the hub holds is another drawing's now
+    const undoIt = () => {
+      if (undo.disabled || stroke) return;
+      rec.ops.push([-1]);
+      weight += DRAW_UNDO;
+      pad = drawPad(rec);
+      paint();
+      changed();
+    };
+    hit(undo, undoIt);
+
+    // the pointer: a stroke from the press to the release, a point for
+    // every pad pixel the pointer comes to
+    const at = e => {
+      const r = cv.getBoundingClientRect();
+      return [Math.max(0, Math.min(w - 1, Math.floor((e.clientX - r.left) * w / r.width))),
+        Math.max(0, Math.min(h - 1, Math.floor((e.clientY - r.top) * h / r.height)))];
+    };
+    cv.addEventListener("pointerdown", e => {
+      if (e.button !== 0 || stroke || sending) return;
+      e.preventDefault();
+      if (full()) { show(); return; }
+      try { cv.setPointerCapture(e.pointerId); } catch (err) {}
+      const [x, y] = at(e);
+      const size = (d.tool === "rub" ? DRAW_RUB : DRAW_PEN)[d.thick ? 1 : 0];
+      stroke = [d.tool === "rub" ? 0 : d.colour, size, x, y];
+      rec.ops.push(stroke);
+      weight++;
+      drawStroke(pad, w, h, stroke, 0, 1);
+      paint();
+    });
+    cv.addEventListener("pointermove", e => {
+      if (!stroke) return;
+      const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+      for (const ev of evs.length ? evs : [e]) {
+        if (full()) break;
+        const [x, y] = at(ev), n = stroke.length;
+        if (x === stroke[n - 2] && y === stroke[n - 1]) continue;
+        stroke.push(x, y);
+        weight++;
+        drawStroke(pad, w, h, stroke, drawPoints(stroke) - 1, drawPoints(stroke));
+      }
+      paint();
+    });
+    const lift = () => { if (!stroke) return; stroke = null; changed(); };
+    cv.addEventListener("pointerup", lift);
+    cv.addEventListener("pointercancel", lift);
+
+    // fitted to the viewport: the largest whole number of device pixels
+    // a pad pixel that leaves the panel inside it
+    const fit = () => {
+      const m = matchMedia("(max-width: 480px)").matches, edge = m ? 8 : 16; // the veil's gutter
+      const chromeW = (m ? 16 : 24) + 2 + 50 + (m ? 6 : 12) + 2, chromeH = (m ? 16 : 26) + 2 + 2 + 12 + 20; // the panel round the pad
+      const vw = document.documentElement.clientWidth, vh = window.innerHeight;
+      const k = drawScale(w, h, vw - chromeW - 2 * edge, vh - chromeH - 2 * edge);
+      cv.style.width = drawCss(w * k);
+      cv.style.height = drawCss(h * k);
+      // The panel is centred, which at 125 or 150 percent leaves the pad
+      // between two device pixels, its pad pixels uneven. It is moved, by
+      // less than a device pixel, onto the grid: the veil is fixed at the
+      // viewport's corner. (Its outermost device column can still blend
+      // with the frame's border there, as in the app: moving the frame
+      // with the pad in it changed nothing. PLAN.md, Drawings.)
+      const dpr = window.devicePixelRatio || 1;
+      cv.style.left = cv.style.top = "";
+      if (Number.isInteger(dpr)) return;
+      const r = cv.getBoundingClientRect();
+      cv.style.left = (Math.round(r.left * dpr) - r.left * dpr) / dpr + "px";
+      cv.style.top = (Math.round(r.top * dpr) - r.top * dpr) / dpr + "px";
+    };
+    addEventListener("resize", fit);
+    const close = drawDialog([el("div", { class: "dp-work" }, side, el("div", { class: "dp-pad" }, cv)),
+      el("div", { class: "btns" }, note, cancel, sendB)], false, e => {
+      if (e.key === "Escape") { e.preventDefault(); cancel.click(); }
+      else if (e.key === "Enter") { e.preventDefault(); sendB.click(); }
+      else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === "z") { e.preventDefault(); undoIt(); }
+    });
+    const shut = () => { removeEventListener("resize", fit); close(); };
+    drawRefit = fit;
+    fit();
+    paint();
+    show();
+
+    // Cancel asks once the record holds anything: a pad rubbed back to
+    // its paper still holds a drawing
+    hit(cancel, async () => {
+      if (sending) return;
+      if (rec.ops.length && !await ask(T("draw.discard.q"), T("draw.discard.why"), T("draw.discard"))) { fit(); return; }
+      drawing = null;
+      shut();
+    });
+    hit(sendB, async () => {
+      if (sending || busy || !rec.ops.length || !me) return;
+      // what would stop the post is said before the wallet is asked for the file
+      const why = held();
+      if (why) { await ask(T("draw.fail"), why); fit(); return; }
+      sending = busy = true;
+      render();
+      say(T("sending"));
+      let stays = true, failed = null;
+      try {
+        if (!d.cid) {
+          const body = new Uint8Array(await (await drawingFile(rec)).arrayBuffer());
+          const ts = String(Date.now());
+          const digest = await sha256hex(body);
+          say(T("draw.wait.file"));
+          const sig = await signed(enc.encode(UPLOAD + ts + "\n" + digest));
+          say(T("uploading"));
+          const { r, out } = await getJSON("/v1/upload", { method: "POST", body,
+            headers: { "Content-Type": "image/png", "X-Hub-Author": b64(me.pub), "X-Hub-Ts": ts, "X-Hub-Sig": b64(sig) } });
+          if (!r.ok) throw new Error(r.status === 503 ? T("pic.store") : out.error || T("http", { code: r.status }));
+          d.cid = out.cid;
+        }
+        stays = await post([{ cid: d.cid, mime: "image/png", filename: "drawing.png", width: w, height: h }],
+          t => say(t === T("waiting") ? T("draw.wait.post") : t));
+        drawing = null;
+      } catch (e) {
+        failed = e.message || held() || line(0);
+      }
+      sending = busy = false;
+      render();
+      if (!stays) return; // the page is loading again, to show the post
+      if (failed === null) { shut(); return; }
+      show();
+      await ask(T("draw.fail"), failed);
+      fit();
+    });
+  }
+  // a move between monitors, or the browser's zoom, changes the density without a resize
+  (function padDensity() {
+    matchMedia("(resolution: " + (window.devicePixelRatio || 1) + "dppx)").addEventListener("change", () => {
+      if (drawRefit) drawRefit();
+      padDensity();
+    }, { once: true });
+  })();
+
   // ---- start: no wallet, a wallet signed in before, or signed out ----
   const saved = recall();
   found.then(ws => {
@@ -2235,7 +2912,7 @@ document.addEventListener("change", e => {
     <div class="row who-row"><span class="grow who-wrap"><a class="me-av" aria-label="{{T "yourpage"}}" hidden><img alt=""></a><span class="who"><b class="name">…</b> <span class="mono id"></span></span></span><button type="button" class="btn profile-btn">{{T "profile"}}</button><button type="button" class="btn signout">{{T "signout"}}</button></div>
     {{if .ReplyTo}}<div class="row re-row" hidden><span class="grow re-q"></span><button type="button" class="btn re-clear" aria-label="{{T "re.clear"}}">{{template "cross"}}</button></div>
     {{end}}<div class="field"><textarea class="text" placeholder="{{if .ReplyTo}}{{T "placeholder.reply"}}{{else}}{{T "placeholder.post"}}{{end}}" aria-label="{{if .ReplyTo}}{{T "text.reply"}}{{else}}{{T "text.post"}}{{end}}"></textarea><div class="at-list" role="listbox" aria-label="{{T "mention"}}" hidden></div></div>
-    <div class="row"><span class="grow status">{{T "checking"}}</span><button type="button" class="btn send" disabled>{{if .ReplyTo}}{{T "reply"}}{{else}}{{T "post"}}{{end}}</button></div>
+    <div class="row"><span class="grow status">{{T "checking"}}</span><button type="button" class="btn draw-btn" aria-label="{{T "draw"}}" disabled>{{template "pad"}}<span>{{T "draw"}}</span></button><button type="button" class="btn send" disabled>{{if .ReplyTo}}{{T "reply"}}{{else}}{{T "post"}}{{end}}</button></div>
   </div>
   <div class="veil" hidden>
     <div class="dlg" role="dialog" aria-modal="true" aria-label="{{T "profile.title"}}">
@@ -2259,6 +2936,9 @@ document.addEventListener("change", e => {
      diagonals — an even size, so it centres on whole pixels in the
      button's 18px face */}}
 {{define "cross"}}<svg class="x" viewBox="0 0 8 8" width="8" height="8" aria-hidden="true"><path class="k" d="M0 0h1v1h-1zM7 0h1v1h-1zM1 1h1v1h-1zM6 1h1v1h-1zM2 2h1v1h-1zM5 2h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM2 5h1v1h-1zM5 5h1v1h-1zM1 6h1v1h-1zM6 6h1v1h-1zM0 7h1v1h-1zM7 7h1v1h-1z"/></svg>{{end}}
+
+{{/* Draw…'s glyph, the Hub app's: a pad with a line on it */}}
+{{define "pad"}}<svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="w" d="M1 2h11v9h-11z"/><path class="k" d="M0 1h13v1h-13zM0 2h1v9h-1zM12 2h1v9h-1zM0 11h13v1h-13zM2 8h1v1h-1zM3 7h1v1h-1zM4 6h2v1h-2zM6 7h1v1h-1zM7 8h2v1h-2zM9 7h1v1h-1zM10 5h1v2h-1z"/></svg>{{end}}
 
 {{define "spark"}}<svg viewBox="0 0 14 14" aria-hidden="true"><path class="k" d="M11 0h1v1h-1zM10 1h1v1h-1zM12 1h1v1h-1zM9 2h1v1h-1zM13 2h1v1h-1zM5 3h1v1h-1zM10 3h1v1h-1zM12 3h1v1h-1zM5 4h1v1h-1zM11 4h1v1h-1zM4 5h1v1h-1zM6 5h1v1h-1zM4 6h1v1h-1zM6 6h1v1h-1zM2 7h2v1h-2zM7 7h2v1h-2zM0 8h2v1h-2zM9 8h2v1h-2zM2 9h2v1h-2zM7 9h2v1h-2zM4 10h1v1h-1zM6 10h1v1h-1zM4 11h1v1h-1zM6 11h1v1h-1zM5 12h1v1h-1zM5 13h1v1h-1z"/><path class="f" d="M11 1h1v1h-1zM11 2h1v1h-1zM11 3h1v1h-1zM5 7h2v1h-2zM2 8h4v1h-4z"/><path class="s" d="M12 2h1v1h-1zM6 8h3v1h-3zM4 9h3v1h-3zM5 10h1v1h-1zM5 11h1v1h-1z"/><path class="w" d="M10 2h1v1h-1zM5 5h1v1h-1zM5 6h1v1h-1zM4 7h1v1h-1z"/></svg>{{end}}
 
