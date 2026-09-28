@@ -10,10 +10,13 @@ import (
 	"exehub/internal/push"
 )
 
-// Web Push for every new post (PLAN.md "Notifications"): the browser
-// subscribes on the public page and the hub pushes to it. Subscribing is
-// anonymous like reading; an endpoint is a secret the browser minted, so
-// knowing it is owning it, and unsubscribing needs nothing more.
+// Web Push (PLAN.md "Notifications"): the browser subscribes on the
+// public page and the hub pushes to it — every new post, or, when the
+// subscription names the profile the page is signed in as, the posts
+// that concern that id. Subscribing takes no signature, like reading:
+// the id is a filter over public posts; an endpoint is a secret the
+// browser minted, so knowing it is owning it, and telling the hub again
+// (a sign-in, a sign-out) or unsubscribing needs nothing more.
 
 //go:embed sw.js
 var swJS []byte
@@ -42,10 +45,17 @@ func (s *Server) handlePushSubscribe(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	// an endpoint the hub holds is told again, not added: the cap is
+	// for new subscribers
+	held, err := s.St.PushHas(sub.Endpoint)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
 	if n, err := s.St.PushCount(); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
-	} else if n >= pushMax {
+	} else if n >= pushMax && !held {
 		writeErr(w, http.StatusTooManyRequests, errors.New("this hub has all the subscribers it can notify"))
 		return
 	}

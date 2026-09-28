@@ -162,8 +162,17 @@ func TestParseSubscription(t *testing.T) {
 	if err != nil || sub.Endpoint != "https://push.example/v1/abc" || len(sub.P256dh) != 65 || len(sub.Auth) != 16 {
 		t.Errorf("good: %v %+v", err, sub)
 	}
+	signed := `{"endpoint":"https://push.example/v1/abc","profile":"0123456789abcdef","keys":{"p256dh":"` + p256dh + `","auth":"` + auth + `"}}`
+	if sub, err := ParseSubscription([]byte(signed)); err != nil || sub.Profile != "0123456789abcdef" {
+		t.Errorf("with a profile: %v %+v", err, sub)
+	}
+	if sub.Profile != "" {
+		t.Errorf("no profile sent, %q kept", sub.Profile)
+	}
 	for _, bad := range []string{
 		`nope`,
+		`{"endpoint":"https://push.example/x","profile":"0123456789ABCDEF","keys":{"p256dh":"` + p256dh + `","auth":"` + auth + `"}}`,
+		`{"endpoint":"https://push.example/x","profile":"abc","keys":{"p256dh":"` + p256dh + `","auth":"` + auth + `"}}`,
 		`{"endpoint":"http://push.example/x","keys":{"p256dh":"` + p256dh + `","auth":"` + auth + `"}}`,
 		`{"endpoint":"https://push.example/x","keys":{"p256dh":"AAAA","auth":"` + auth + `"}}`,
 		`{"endpoint":"https://push.example/x","keys":{"p256dh":"` + p256dh + `","auth":"AAAA"}}`,
@@ -176,16 +185,25 @@ func TestParseSubscription(t *testing.T) {
 
 func TestMessage(t *testing.T) {
 	p := &store.FeedPost{ID: "p1", Author: "abc", AuthorName: "Ann", Text: "hello   there\nworld"}
-	if m := message(p); m != (Message{Title: "Ann", Body: "hello there world", URL: "/p/p1", Tag: "p1"}) {
+	if m := message(p, every); m != (Message{Title: "Ann", Body: "hello there world", URL: "/p/p1", Tag: "p1"}) {
 		t.Errorf("post: %+v", m)
 	}
+	if m := message(p, mentioned); m.Title != "Ann mentioned you" || m.URL != "/p/p1" {
+		t.Errorf("mention: %+v", m)
+	}
 	p.ReplyTo, p.AuthorName = "p0", ""
-	if m := message(p); m.Title != "abc replied" || m.URL != "/p/p0" {
+	if m := message(p, every); m.Title != "abc replied" || m.URL != "/p/p0" {
 		t.Errorf("reply: %+v", m)
+	}
+	if m := message(p, followed); m.Title != "abc replied" || m.URL != "/p/p0" {
+		t.Errorf("reply in a thread: %+v", m)
+	}
+	if m := message(p, answered); m.Title != "abc replied to you" || m.URL != "/p/p0" {
+		t.Errorf("reply to you: %+v", m)
 	}
 	p.Text, p.ReplyTo = "", ""
 	p.Embeds = []envelope.Embed{{CID: "c", MIME: "image/png"}}
-	if m := message(p); m.Body != "a picture" {
+	if m := message(p, every); m.Body != "a picture" {
 		t.Errorf("picture: %+v", m)
 	}
 	long := strings.Repeat("字", 300)
@@ -278,5 +296,143 @@ func TestNotify(t *testing.T) {
 	subs, _ := st.PushSubs()
 	if len(subs) != 1 || subs[0].Endpoint != ts.URL+"/live" {
 		t.Errorf("after a 410, subscriptions: %+v", subs)
+	}
+}
+
+// TestNotifyFor: a subscription that names a profile hears of what
+// concerns that id — a reply to a post of theirs, a reply in a thread
+// they wrote in, a post that mentions them — never of their own post
+// nor of a thread they are no part of, while one that names none hears
+// of every post, as before.
+func TestNotifyFor(t *testing.T) {
+	st, err := store.Open(t.TempDir() + "/hub.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	k, _ := LoadKey(t.TempDir())
+	ua, _ := ecdh.P256().GenerateKey(rand.Reader)
+	auth := make([]byte, 16)
+	rand.Read(auth)
+
+	var mu sync.Mutex
+	got := map[string]string{} // endpoint path to the title it was sent
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var b bytes.Buffer
+		b.ReadFrom(r.Body)
+		plain, err := decrypt(b.Bytes(), auth, ua)
+		if err != nil {
+			t.Errorf("decrypt: %v", err)
+		}
+		var m Message
+		json.Unmarshal(plain, &m)
+		mu.Lock()
+		got[strings.TrimPrefix(r.URL.Path, "/")] = m.Title
+		mu.Unlock()
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer ts.Close()
+
+	type person struct {
+		priv ed25519.PrivateKey
+		pub  ed25519.PublicKey
+		id   string
+		seq  int
+	}
+	people := map[string]*person{}
+	n := &Notifier{St: st, Bus: events.New(), Sender: &Sender{Key: k, Client: ts.Client()}}
+	// post writes as who, notifies, and returns the post's id with what
+	// each subscriber was sent
+	post := func(who, text, replyTo string) (string, map[string]string) {
+		t.Helper()
+		w := people[who]
+		if w == nil {
+			pub, priv, _ := ed25519.GenerateKey(nil)
+			w = &person{priv: priv, pub: pub}
+			people[who] = w
+		}
+		w.seq++
+		body := map[string]any{"text": text}
+		if replyTo != "" {
+			body["reply_to"] = replyTo
+		}
+		raw, _ := json.Marshal(map[string]any{
+			"type": "post.create", "author": base64.StdEncoding.EncodeToString(w.pub),
+			"seq": w.seq, "ts": 1756500000000 + int64(len(people)*1000+w.seq), "body": body,
+		})
+		e, err := envelope.Parse(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.id = e.ProfileID()
+		op, _ := e.Op()
+		id, _, err := st.Ingest(raw, ed25519.Sign(w.priv, raw), e, op)
+		if err != nil {
+			t.Fatal(err)
+		}
+		mu.Lock()
+		got = map[string]string{}
+		mu.Unlock()
+		n.notify(events.Event{Type: "post.create", ID: id, Author: w.id})
+		mu.Lock()
+		defer mu.Unlock()
+		return id, got
+	}
+	same := func(what string, got, want map[string]string) {
+		t.Helper()
+		if len(got) != len(want) {
+			t.Errorf("%s: sent %v, want %v", what, got, want)
+			return
+		}
+		for k, v := range want {
+			if got[k] != v {
+				t.Errorf("%s: sent %v, want %v", what, got, want)
+				return
+			}
+		}
+	}
+	subscribe := func(path, profile string) {
+		t.Helper()
+		if err := st.PushAdd(store.PushSub{Endpoint: ts.URL + "/" + path, P256dh: ua.PublicKey().Bytes(), Auth: auth, Profile: profile}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// everyone has written once, in threads of their own, before anyone
+	// subscribes: the ids are known and nobody shares a thread
+	for _, who := range []string{"ann", "bob", "cy", "dee"} {
+		post(who, who+" says hello", "")
+		subscribe(who, people[who].id)
+	}
+	subscribe("all", "")
+	ann, bob, cy, dee := people["ann"].id, people["bob"].id, people["cy"].id, people["dee"].id
+
+	root, sent := post("ann", "a thread of Ann's", "")
+	same("a new thread", sent, map[string]string{"all": ann})
+
+	reply, sent := post("bob", "Bob answers Ann", root)
+	same("a reply to the root", sent, map[string]string{"all": bob + " replied", "ann": bob + " replied to you"})
+
+	_, sent = post("cy", "Cy answers Bob", reply)
+	same("a reply to a reply", sent, map[string]string{"all": cy + " replied", "bob": cy + " replied to you", "ann": cy + " replied"})
+
+	_, sent = post("ann", "Ann answers her own thread", root)
+	same("the author's own reply", sent, map[string]string{"all": ann + " replied", "bob": ann + " replied", "cy": ann + " replied"})
+
+	_, sent = post("dee", "look at this, @"+ann, "")
+	same("a mention", sent, map[string]string{"all": dee, "ann": dee + " mentioned you"})
+
+	_, sent = post("dee", "the id `@"+bob+"` as code", "")
+	same("an id in a code span", sent, map[string]string{"all": dee})
+
+	_, sent = post("dee", "Dee joins, with a word for @"+cy, root)
+	same("a reply that mentions", sent, map[string]string{"all": dee + " replied", "ann": dee + " replied to you", "bob": dee + " replied", "cy": dee + " mentioned you"})
+
+	// signing out is the same endpoint told again with no profile
+	subscribe("bob", "")
+	_, sent = post("dee", "a thread nobody is in", "")
+	same("after a sign-out", sent, map[string]string{"all": dee, "bob": dee})
+	if subs, _ := st.PushSubs(); len(subs) != 5 {
+		t.Errorf("%d subscriptions, want 5", len(subs))
 	}
 }

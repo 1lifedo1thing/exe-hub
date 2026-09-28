@@ -1518,44 +1518,92 @@ document.addEventListener("change", e => {
   });
 })();
 </script>
-{{if .PushKey}}<script>
-// Notify. The bell on the find strip subscribes this browser to a push
-// for every new post; the service worker (/sw.js) shows them and does
-// nothing else. Permission is asked inside the click, as browsers
+{{if .Push}}<script>
+// Notify. The bell on the find strip subscribes this browser to a push:
+// for every new post, or, when the page is signed in, for what concerns
+// that id — a reply to a post of theirs or in a thread they wrote in, a
+// post that mentions them. The service worker (/sw.js) shows them and
+// does nothing else. Permission is asked inside the click, as browsers
 // require; the subscription goes to the hub with the key the page
-// carries; pressing the bell again tells the hub and the browser both.
-// Any failure leaves the bell where it was.
+// carries and the id it is for; pressing the bell again tells the hub
+// and the browser both. Any failure leaves the bell where it was.
+//
+// The subscription follows the id. The wallet strip says whom the page
+// is signed in as ("exe-hub-id": an id the gate named, or "" at Sign
+// Out), and the hub is told again when that is not whom it was last
+// told — on every page, a thread's too, where there is no bell. A
+// wallet that merely could not be reached on this visit changes
+// nothing.
 (() => {
+  if (!("serviceWorker" in navigator && "PushManager" in window && "Notification" in window)) return;
   const bell = document.querySelector("#notify");
-  if (!bell || !document.documentElement.classList.contains("push")) return;
-  const key = Uint8Array.from(atob(bell.dataset.key.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+  const KEY = "exe-hub-push", ID = /^[0-9a-f]{16}$/;
   const tell = (path, body) => fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const set = on => {
+  // whom the page is signed in as: the id remembered from the last
+  // visit, until the wallet strip says
+  let cur = "", on = false;
+  try { const w = JSON.parse(localStorage.getItem("exe-hub-wallet") || "null"); if (w && ID.test(w.id || "")) cur = w.id; } catch (e) {}
+  // whom the hub was last told this browser's subscription is for
+  const told = () => { try { return localStorage.getItem(KEY) || ""; } catch (e) { return ""; } };
+  const keep = id => { try { id ? localStorage.setItem(KEY, id) : localStorage.removeItem(KEY); } catch (e) {} };
+  const show = () => {
+    if (!bell) return;
     bell.setAttribute("aria-pressed", on);
-    bell.title = T(on ? "notify.on" : "notify.off");
+    bell.title = T((on ? "notify.on" : "notify.off") + ((on ? told() : cur) ? ".id" : ""));
   };
-  const ready = navigator.serviceWorker.register("/sw.js");
-  ready.then(r => r.pushManager.getSubscription()).then(s => { set(!!s); bell.disabled = false; }).catch(() => {});
-  bell.addEventListener("click", async () => {
+  // one thing at a time, in the order asked: a sign-in and a Sign Out
+  // close together reach the hub in that order
+  let chain = Promise.resolve();
+  const next = f => chain = chain.then(f).catch(() => {});
+  const ready = bell ? navigator.serviceWorker.register("/sw.js") : navigator.serviceWorker.getRegistration();
+  const held = () => ready.then(r => r ? r.pushManager.getSubscription() : null);
+  next(async () => {
+    // the bell stays disabled when the browser cannot say (as before)
+    on = !!(await held());
+    show();
+    if (bell) bell.disabled = false;
+  });
+  document.addEventListener("exe-hub-id", e => {
+    const id = ID.test(e.detail || "") ? e.detail : "";
+    next(async () => {
+      cur = id;
+      try {
+        const s = await held();
+        on = !!s;
+        if (s && told() !== id && (await tell("/v1/push/subscribe", { ...s.toJSON(), profile: id })).ok) keep(id);
+      } finally {
+        show();
+      }
+    });
+  });
+  if (!bell) return;
+  const key = Uint8Array.from(atob(bell.dataset.key.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+  bell.addEventListener("click", () => {
     const want = bell.getAttribute("aria-pressed") !== "true";
     const asked = want ? Notification.requestPermission() : null;
     bell.disabled = true;
-    try {
-      const r = await ready;
-      if (want) {
-        if (await asked !== "granted") throw new Error("denied");
-        const s = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
-        if (!(await tell("/v1/push/subscribe", s.toJSON())).ok) { await s.unsubscribe(); throw new Error("refused"); }
-      } else {
-        const s = await r.pushManager.getSubscription();
-        if (s) { await tell("/v1/push/unsubscribe", { endpoint: s.endpoint }); await s.unsubscribe(); }
+    next(async () => {
+      try {
+        const r = await ready;
+        if (want) {
+          if (await asked !== "granted") throw new Error("denied");
+          const s = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+          const id = cur;
+          if (!(await tell("/v1/push/subscribe", { ...s.toJSON(), profile: id })).ok) { await s.unsubscribe(); throw new Error("refused"); }
+          keep(id);
+        } else {
+          const s = await r.pushManager.getSubscription();
+          if (s) { await tell("/v1/push/unsubscribe", { endpoint: s.endpoint }); await s.unsubscribe(); }
+          keep("");
+        }
+        on = want;
+      } catch (e) {
+        on = !want;
+      } finally {
+        show();
+        bell.disabled = false;
       }
-      set(want);
-    } catch (e) {
-      set(!want);
-    } finally {
-      bell.disabled = false;
-    }
+    });
   });
 })();
 </script>{{end}}
@@ -1776,6 +1824,8 @@ document.addEventListener("change", e => {
     // visit shows them before layout (the head script writes the rule)
     showOwn(st.v.profile);
     remember({ name: me.name, address: me.address, id: st.v.profile });
+    // and the Notify subscription follows it (the Notify script listens)
+    document.dispatchEvent(new CustomEvent("exe-hub-id", { detail: st.v.profile }));
     q(".id").textContent = st.v.profile;
     q(".id").title = me.address;
     q(".name").textContent = st.profile && st.profile.name ? st.profile.name : T("noname");
@@ -1891,6 +1941,9 @@ document.addEventListener("change", e => {
     const w = me && me.wallet;
     me = null;
     signedOut();
+    // Sign Out, pressed: the Notify subscription is no id's any more. A
+    // wallet that could not be reached says nothing of the kind.
+    document.dispatchEvent(new CustomEvent("exe-hub-id", { detail: "" }));
     note.textContent = noteText;
     try {
       if (w && w.legacy && w.legacy.disconnect) w.legacy.disconnect();

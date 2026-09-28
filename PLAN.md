@@ -1476,10 +1476,11 @@ hub that carries the post.
   swap on both pages; the 404), and the wallet harness's reply step
   for landing in place.
 
-## Notifications — Web Push for every new post (built)
+## Notifications — Web Push, by what concerns the reader (built)
 
-The public page can notify a browser of every post that lands on the
-hub: the installed copy on a phone most of all, which is where iOS
+The public page can notify a browser of the posts that land on the
+hub — every one, or, for a reader who is signed in, the ones that
+concern their id: the installed copy on a phone most of all, which is where iOS
 allows it (a Home Screen web app, since iOS 16.4), though a desktop
 browser tab does as well. Nothing but the standard library
 (`internal/push`): RFC 8030 (the request to the push service), 8291
@@ -1493,9 +1494,32 @@ vector) and 8292 (VAPID).
   VAPID subject, when https; else the project's page); `POST
   /v1/push/unsubscribe` `{endpoint}` removes it — an endpoint is a
   secret the browser minted, so knowing it is owning it. Capped at
-  10,000 subscriptions. Every subscriber gets every post, their own
-  included: there is no identity to filter by. Per-key subscriptions
-  (replies to my posts) are the obvious next step.
+  10,000 subscriptions (an endpoint told again is no new subscriber).
+- **By id** (Livid, 2026-09-28: "notifications are sent for everything,
+  change it to be more relevant for signed-in ID"). Beside the
+  subscription the page sends `"profile"`, the 16 hex digits it is
+  signed in as, kept in `push_subs.profile`; "" is a reader with no id,
+  who hears of every post as before. For a subscription with an id the
+  notifier pushes only what concerns it, under a title that says why:
+  a reply to a post of theirs ("Name replied to you"), a post that
+  mentions them ("Name mentioned you" — a mention that shows as one,
+  `card.Mentions`, so not an id in a code span), a reply in a thread
+  they wrote in ("Name replied": the root's author and everyone who
+  answered under it, `store.ThreadAuthors`). Never their own post, nor
+  a new thread or a reply in a thread they are no part of. The id is a
+  filter over public posts, not a claim, so nothing is signed for it:
+  naming somebody else's id shows nothing their page would not.
+- **The subscription follows the id.** The wallet strip says whom the
+  page is signed in as — the event `exe-hub-id` on `document`, with the
+  id the gate named, or "" when Sign Out is pressed — and the Notify
+  script, on every page of a hub that pushes (a thread has no bell but
+  has the wallet strip), tells the hub again when that is not whom it
+  was last told (`localStorage["exe-hub-push"]`). One word to the hub
+  at a time, in the order asked, so a Sign Out and a sign-in close
+  together land in that order. A wallet that merely could not be
+  reached on a visit (locked, or the site forgotten) is no Sign Out:
+  the page is signed out, the subscription stays its id's. The bell's
+  tooltip says which it is: "every new post" or "replies and mentions".
 - **The hub's VAPID key** is a P-256 pair at `<state>/vapid_p256`,
   generated on first start beside `hub_ed25519` (which cannot serve:
   VAPID signs ES256). Browsers bind a subscription to it, so a changed
@@ -1504,7 +1528,7 @@ vector) and 8292 (VAPID).
 - **Sending**: a notifier on the event bus, like the page's live feed.
   On every `post.create` — direct or replicated, replies included — it
   loads the post and pushes `{title, body, url, tag}` to each
-  subscriber: the author's name (or "Name replied"), a 200-character
+  subscriber it is for: the author's name (or "Name replied"), a 200-character
   excerpt or "a picture" / "a file", the post's page (the thread, for a
   reply), the post id as tag so a duplicate delivery is one
   notification. Eight sends in flight, TTL a day for a device that is
@@ -1537,6 +1561,16 @@ vector) and 8292 (VAPID).
   again tells the hub and the browser; any failure leaves the bell
   where it was. The live feed's swap keeps the find strip as it is: the
   field and the bell are the reader's state, never the server's.
+- Check: `go test ./internal/push ./internal/store` (TestNotifyFor: who
+  is sent what, and under which title; TestPushProfileMigration: an
+  older database keeps its subscribers, with no id) and
+  `~/tools/playwright/exe-hub-notify-id-test.js` against a scratch hub —
+  headless Chromium has no push service, so the registration and the
+  PushManager are stubbed, the wallet is the Wallet Standard mock, and
+  what the hub keeps is read from its database.
+- **Not built:** a choice for a signed-in reader to hear of new threads
+  too (today: sign out, or a second browser); the Hub app has no push;
+  the notification's words are English whatever the page's language.
 
 ## Link cards — the first link, unfurled (built)
 
@@ -1839,8 +1873,7 @@ time, so what is saved must be the stable id under it.
   page, a rename. The Hub app's list: `exe-hub-app-mention-list-test.js`
   (the unbuilt app over the live desktop, the publish held by the test so
   nothing is posted).
-- **Not built:** telling the person they were mentioned (push is per
-  hub, not per reader, today); search by name does not find a post that
+- **Not built:** search by name does not find a post that
   mentions that name, since the text holds the id (searching the id
   does); two profiles with one name picked in the same post both go out
   as the one picked last; on the pages the list sits under the field,

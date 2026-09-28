@@ -178,7 +178,8 @@ CREATE TABLE IF NOT EXISTS push_subs (
   p256dh   BLOB NOT NULL,              -- the browser's P-256 public key, 65 bytes
   auth     BLOB NOT NULL,              -- the browser's 16-byte auth secret
   base     TEXT NOT NULL DEFAULT '',   -- the hub as the subscriber reached it: the VAPID subject
-  created  INTEGER NOT NULL
+  created  INTEGER NOT NULL,
+  profile  TEXT NOT NULL DEFAULT ''    -- the profile id the browser was signed in as, '' for none: what it is notified of
 );
 CREATE TABLE IF NOT EXISTS peer_state (
   hub    TEXT PRIMARY KEY,
@@ -348,6 +349,9 @@ CREATE TABLE IF NOT EXISTS translation_notes (
 		// page (PLAN.md, Post cards): the quoted post's whole id, '' for
 		// a link card
 		`ALTER TABLE cards ADD COLUMN quote TEXT NOT NULL DEFAULT ''`,
+		// whom a subscription is for (PLAN.md, Notifications): the
+		// profile id its browser was signed in as, '' for every post
+		`ALTER TABLE push_subs ADD COLUMN profile TEXT NOT NULL DEFAULT ''`,
 	} {
 		if _, err := s.db.Exec(ddl); err != nil && !strings.Contains(err.Error(), "duplicate column") {
 			return err
@@ -2803,18 +2807,31 @@ func (s *Store) Counts() (profiles, posts int, err error) {
 
 // PushSub is one browser's Web Push subscription (PLAN.md
 // "Notifications"): where to POST and the keys the payload is
-// encrypted to. Anonymous — nothing ties it to a profile.
+// encrypted to. Profile is the id the browser was signed in as when it
+// last told the hub, and what the notifier filters by; "" is a reader
+// with no id, who hears of every post. It is a filter over public
+// posts, not a claim: nothing is signed for it.
 type PushSub struct {
 	Endpoint     string
 	P256dh, Auth []byte
 	Base         string
+	Profile      string
 }
 
-// PushAdd stores a subscription; the same endpoint again replaces it.
+// PushAdd stores a subscription; the same endpoint again replaces it,
+// which is how a browser says it signed in, switched or signed out.
 func (s *Store) PushAdd(sub PushSub) error {
-	_, err := s.db.Exec(`INSERT OR REPLACE INTO push_subs(endpoint, p256dh, auth, base, created) VALUES (?, ?, ?, ?, ?)`,
-		sub.Endpoint, sub.P256dh, sub.Auth, sub.Base, time.Now().UnixMilli())
+	_, err := s.db.Exec(`INSERT OR REPLACE INTO push_subs(endpoint, p256dh, auth, base, created, profile) VALUES (?, ?, ?, ?, ?, ?)`,
+		sub.Endpoint, sub.P256dh, sub.Auth, sub.Base, time.Now().UnixMilli(), sub.Profile)
 	return err
+}
+
+// PushHas says whether the hub holds this endpoint: telling it again
+// adds no subscriber, so the cap has nothing to say.
+func (s *Store) PushHas(endpoint string) (bool, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM push_subs WHERE endpoint = ?`, endpoint).Scan(&n)
+	return n > 0, err
 }
 
 func (s *Store) PushRemove(endpoint string) error {
@@ -2828,9 +2845,33 @@ func (s *Store) PushCount() (int, error) {
 	return n, err
 }
 
+// ThreadAuthors is everyone who wrote in the thread under root, its
+// own author among them: the people a new reply there concerns (PLAN.md,
+// Notifications).
+func (s *Store) ThreadAuthors(root string) (map[string]bool, error) {
+	rows, err := s.db.Query(`WITH RECURSIVE down(id) AS (
+		SELECT id FROM posts WHERE id = ?
+		UNION ALL
+		SELECT p.id FROM posts p JOIN down d ON p.reply_to = d.id)
+		SELECT DISTINCT author FROM posts WHERE id IN (SELECT id FROM down)`, root)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var a string
+		if err := rows.Scan(&a); err != nil {
+			return nil, err
+		}
+		out[a] = true
+	}
+	return out, rows.Err()
+}
+
 // PushSubs is every subscription, oldest first.
 func (s *Store) PushSubs() ([]PushSub, error) {
-	rows, err := s.db.Query(`SELECT endpoint, p256dh, auth, base FROM push_subs ORDER BY created, endpoint`)
+	rows, err := s.db.Query(`SELECT endpoint, p256dh, auth, base, profile FROM push_subs ORDER BY created, endpoint`)
 	if err != nil {
 		return nil, err
 	}
@@ -2838,7 +2879,7 @@ func (s *Store) PushSubs() ([]PushSub, error) {
 	var out []PushSub
 	for rows.Next() {
 		var sub PushSub
-		if err := rows.Scan(&sub.Endpoint, &sub.P256dh, &sub.Auth, &sub.Base); err != nil {
+		if err := rows.Scan(&sub.Endpoint, &sub.P256dh, &sub.Auth, &sub.Base, &sub.Profile); err != nil {
 			return nil, err
 		}
 		out = append(out, sub)

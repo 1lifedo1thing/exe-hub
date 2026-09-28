@@ -130,22 +130,24 @@ var webTmpls = func() map[string]*template.Template {
 var webStrings = map[string]map[string]string{
 	"en": {
 		// the feed
-		"nothing":      "Nothing here yet.",
-		"find":         "Search posts", // the find strip's field and its label
-		"search":       "Search",       // its button, the search window's title, the page's <title>
-		"notify.off":   "Notify me of every new post",
-		"notify.on":    "Notifying you of every new post",
-		"language":     "Language", // the menu beside the bell, and on a thread's top strip
-		"prev":         "Prev",
-		"next":         "Next",
-		"members":      "members", // after the number the heartbeat rewrites
-		"posts":        "posts",   // the same, and a profile's count
-		"online":       "online",  // the same
-		"online.title": "Who reads this hub",
-		"matches":      "{n} posts match",
-		"matches.one":  "{n} post matches",
-		"nomatch":      "No post matches.",
-		"search.hint":  "Type a word or two, then Search. Every word must appear in the post.",
+		"nothing":       "Nothing here yet.",
+		"find":          "Search posts", // the find strip's field and its label
+		"search":        "Search",       // its button, the search window's title, the page's <title>
+		"notify.off":    "Notify me of every new post",
+		"notify.on":     "Notifying you of every new post",
+		"notify.off.id": "Notify me of replies and mentions", // the bell of a reader who is signed in: what concerns their id
+		"notify.on.id":  "Notifying you of replies and mentions",
+		"language":      "Language", // the menu beside the bell, and on a thread's top strip
+		"prev":          "Prev",
+		"next":          "Next",
+		"members":       "members", // after the number the heartbeat rewrites
+		"posts":         "posts",   // the same, and a profile's count
+		"online":        "online",  // the same
+		"online.title":  "Who reads this hub",
+		"matches":       "{n} posts match",
+		"matches.one":   "{n} post matches",
+		"nomatch":       "No post matches.",
+		"search.hint":   "Type a word or two, then Search. Every word must appear in the post.",
 		// a thread
 		"back":          "Back to the feed", // the title bar's box, and the stats desk's way home
 		"feed":          "Feed",             // the button back to it
@@ -316,6 +318,8 @@ var webStrings = map[string]map[string]string{
 		"search":             "搜索",
 		"notify.off":         "有新帖时通知我",
 		"notify.on":          "已订阅新帖通知",
+		"notify.off.id":      "有人回复或提到我时通知我",
+		"notify.on.id":       "已订阅回复和提及通知",
 		"language":           "语言",
 		"prev":               "上一页",
 		"next":               "下一页",
@@ -481,6 +485,8 @@ var webStrings = map[string]map[string]string{
 		"search":             "検索",
 		"notify.off":         "新しい投稿を通知する",
 		"notify.on":          "新しい投稿を通知中",
+		"notify.off.id":      "返信とメンションを通知する",
+		"notify.on.id":       "返信とメンションを通知中",
 		"language":           "言語",
 		"prev":               "前へ",
 		"next":               "次へ",

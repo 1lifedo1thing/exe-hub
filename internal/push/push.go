@@ -1,5 +1,8 @@
-// Package push sends Web Push notifications — one for every post that
-// lands on the hub — to the browsers that subscribed on the public page.
+// Package push sends Web Push notifications to the browsers that
+// subscribed on the public page: every post that lands on the hub to a
+// reader with no id, and to one signed in the posts that concern that
+// id — a reply to a post of theirs or in a thread they wrote in, and a
+// post that mentions them.
 // The protocol is three RFCs and nothing but the standard library:
 // RFC 8030 (the request to the push service), RFC 8291 (the payload
 // encryption, aes128gcm) and RFC 8292 (VAPID: the hub identifying itself
@@ -172,10 +175,13 @@ func encrypt(plain, uaPub, auth []byte, as *ecdh.PrivateKey, salt []byte) ([]byt
 
 // ParseSubscription reads what a browser's PushSubscription.toJSON() sent:
 // an https endpoint the push service minted and the two keys the payload
-// is encrypted to. Anything else is a 400.
+// is encrypted to — and beside them, from a page that is signed in,
+// "profile": the 16 hex digits of the id to notify for. Anything else
+// is a 400.
 func ParseSubscription(body []byte) (store.PushSub, error) {
 	var in struct {
 		Endpoint string `json:"endpoint"`
+		Profile  string `json:"profile"`
 		Keys     struct {
 			P256dh string `json:"p256dh"`
 			Auth   string `json:"auth"`
@@ -192,7 +198,10 @@ func ParseSubscription(body []byte) (store.PushSub, error) {
 		b, _ := base64.RawURLEncoding.DecodeString(strings.TrimRight(s, "="))
 		return b
 	}
-	sub := store.PushSub{Endpoint: in.Endpoint, P256dh: dec(in.Keys.P256dh), Auth: dec(in.Keys.Auth)}
+	if in.Profile != "" && !profileID(in.Profile) {
+		return store.PushSub{}, errors.New("profile must be a profile id, 16 hex digits")
+	}
+	sub := store.PushSub{Endpoint: in.Endpoint, P256dh: dec(in.Keys.P256dh), Auth: dec(in.Keys.Auth), Profile: in.Profile}
 	if _, err := ecdh.P256().NewPublicKey(sub.P256dh); err != nil {
 		return store.PushSub{}, errors.New("p256dh must be a P-256 public key")
 	}
@@ -200,6 +209,19 @@ func ParseSubscription(body []byte) (store.PushSub, error) {
 		return store.PushSub{}, errors.New("auth must be 16 bytes")
 	}
 	return sub, nil
+}
+
+// profileID: 16 lowercase hex digits, as a profile id is written.
+func profileID(s string) bool {
+	if len(s) != 16 {
+		return false
+	}
+	for _, c := range []byte(s) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // ErrGone: the push service says the subscription no longer exists.
@@ -306,7 +328,46 @@ type Message struct {
 	Tag   string `json:"tag"`
 }
 
-func message(p *store.FeedPost) Message {
+// What a post is to one subscriber, and so whether it is pushed and
+// under which title.
+const (
+	skip      = iota // nothing to them: their own post, or one in a thread they are no part of
+	every            // a reader with no id hears of every post
+	mentioned        // the post names them
+	answered         // a reply to a post of theirs
+	followed         // a reply in a thread they wrote in
+)
+
+// audience is whom a post concerns: its author, who is never told of
+// their own post; the author of the post it answers; everyone who wrote
+// in its thread; and the ids its text mentions.
+type audience struct {
+	author   string
+	parent   string
+	thread   map[string]bool
+	mentions map[string]bool
+}
+
+// why is what the post is to a subscriber signed in as profile: an
+// answer to them before a mention, a mention before a thread they are
+// merely in.
+func (a *audience) why(profile string) int {
+	switch {
+	case profile == "":
+		return every
+	case profile == a.author:
+		return skip
+	case profile == a.parent:
+		return answered
+	case a.mentions[profile]:
+		return mentioned
+	case a.thread[profile]:
+		return followed
+	}
+	return skip
+}
+
+func message(p *store.FeedPost, why int) Message {
 	who := p.AuthorName
 	if who == "" {
 		who = p.Author
@@ -314,6 +375,12 @@ func message(p *store.FeedPost) Message {
 	m := Message{Title: who, Body: excerpt(card.NameMentions(p.Text, p.Mentions), 200), URL: "/p/" + p.ID, Tag: p.ID}
 	if p.ReplyTo != "" {
 		m.Title, m.URL = who+" replied", "/p/"+p.ReplyTo
+	}
+	switch why {
+	case answered:
+		m.Title = who + " replied to you"
+	case mentioned:
+		m.Title = who + " mentioned you"
 	}
 	if m.Body == "" {
 		pics, files := 0, 0
@@ -352,10 +419,11 @@ func excerpt(text string, n int) string {
 	return s + "…"
 }
 
-// Notifier turns every post landing on the hub into a push to every
-// subscriber. Driven by the event bus like the page's live feed: events
-// one at a time, each fanned out eight sends wide, and a subscription
-// its service reports gone is dropped.
+// Notifier turns a post landing on the hub into a push to the
+// subscribers it is for: every one with no id, and of those signed in
+// the ones it concerns. Driven by the event bus like the page's live
+// feed: events one at a time, each fanned out eight sends wide, and a
+// subscription its service reports gone is dropped.
 type Notifier struct {
 	St     *store.Store
 	Bus    *events.Broadcaster
@@ -368,6 +436,30 @@ func (n *Notifier) Run() {
 			n.notify(ev)
 		}
 	}
+}
+
+// audience reads whom p concerns. A reply whose parent is not here (a
+// replicated one, ahead of its thread) concerns only those it mentions.
+func (n *Notifier) audience(p *store.FeedPost) (*audience, error) {
+	a := &audience{author: p.Author, mentions: map[string]bool{}}
+	for _, m := range card.Mentions(p.Text) {
+		a.mentions[p.Text[m[0]+1:m[1]]] = true
+	}
+	if p.ReplyTo == "" {
+		return a, nil
+	}
+	switch parent, err := n.St.Post(p.ReplyTo); {
+	case err == nil:
+		a.parent = parent.Author
+	case !errors.Is(err, store.ErrNotFound):
+		return nil, err
+	}
+	root, err := n.St.Root(p.ID)
+	if err != nil || root == "" {
+		return a, err
+	}
+	a.thread, err = n.St.ThreadAuthors(root)
+	return a, err
 }
 
 func (n *Notifier) notify(ev events.Event) {
@@ -384,16 +476,32 @@ func (n *Notifier) notify(ev events.Event) {
 		log.Printf("push: post %s: %v", ev.ID, err)
 		return
 	}
-	payload, _ := json.Marshal(message(p))
+	aud, err := n.audience(p)
+	if err != nil {
+		log.Printf("push: post %s: %v", ev.ID, err)
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	var (
-		wg   sync.WaitGroup
-		mu   sync.Mutex
-		gone []string
-		sem  = make(chan struct{}, 8)
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		gone     []string
+		sem      = make(chan struct{}, 8)
+		payloads = map[int][]byte{} // one per title
+		sent     int
 	)
 	for _, sub := range subs {
+		why := aud.why(sub.Profile)
+		if why == skip {
+			continue
+		}
+		payload := payloads[why]
+		if payload == nil {
+			payload, _ = json.Marshal(message(p, why))
+			payloads[why] = payload
+		}
+		sent++
 		wg.Add(1)
 		sem <- struct{}{}
 		go func() {
@@ -415,5 +523,5 @@ func (n *Notifier) notify(ev events.Event) {
 			log.Printf("push: forget %s: %v", e, err)
 		}
 	}
-	log.Printf("push: post %.8s to %d subscribers, %d gone", ev.ID, len(subs), len(gone))
+	log.Printf("push: post %.8s to %d of %d subscribers, %d gone", ev.ID, sent, len(subs), len(gone))
 }

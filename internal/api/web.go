@@ -449,6 +449,7 @@ type webData struct {
 	Lang           string // the request's ?lang=, when it said one: carried by the pager links and the find strip
 	Q              string // the same as "?lang=…", for a link with no query of its own
 	PushKey        string // the home page on a hub that pushes: the VAPID public key for the Notify box
+	Push           bool   // every page on a hub that pushes: the script that keeps a subscription on the signed-in id
 	Query          string // the search page's words, and what the find strip's field holds
 	Join           *webJoin
 	Compose        *webCompose // the wallet strip: the home page's first page and every thread
@@ -1349,6 +1350,7 @@ func (s *Server) webTranslations(rd webReading, ids []string) map[string]store.T
 func (s *Server) webRender(w http.ResponseWriter, r *http.Request, code int, d *webData) {
 	d.Base, d.Host, d.Path = webBase(r), r.Host, r.URL.Path
 	d.L = webLocaleOf(r)
+	d.Push = s.Push != nil
 	if l := strings.ToLower(r.URL.Query().Get("lang")); l != "" && l != "orig" {
 		d.DateLoc = l
 	}
