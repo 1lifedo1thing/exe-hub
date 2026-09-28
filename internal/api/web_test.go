@@ -284,7 +284,7 @@ func TestWebThreadProfile(t *testing.T) {
 	// page; the post heading the page has none (the window answers it as
 	// it stands), and the window has the line that names the reply, hidden
 	for _, id := range []string{reply, deep} {
-		if !strings.Contains(body, `<div class="foot re"><a class="rlink" role="button" href="/p/`+id+`">Reply</a></div>`) {
+		if !strings.Contains(body, `<div class="foot re"><a class="rlink" role="button" href="/p/`+id+`">Reply</a><button type="button" class="btn del"`) {
 			t.Errorf("reply %s lacks its Reply link", id)
 		}
 	}
@@ -1348,6 +1348,89 @@ func TestWebCompose(t *testing.T) {
 	for _, path := range []string{"/?before=" + ids[1], "/u/" + identity.Fingerprint(pub), "/search?q=post"} {
 		if _, body := get(t, h, path); strings.Contains(body, `id="compose"`) {
 			t.Errorf("%s carries the compose strip", path)
+		}
+	}
+}
+
+// TestWebDelete: every post carries a Delete button on a foot line of
+// its own, standing on the post's author id, and nothing shows it until a
+// script names the reader's own id — the head script from the wallet it
+// remembers, before layout, and the compose script from the id the gate
+// answers with. A page with no Post window has no such script, so the
+// line stays down for good.
+func TestWebDelete(t *testing.T) {
+	s := testServer(t, &config.Config{Gate: config.Gate{Mode: "open"}})
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	me := identity.Fingerprint(pub)
+	root := ingest(t, s, priv, pub, 1, "post.create", map[string]any{"text": "a post to delete"})
+	reply := ingest(t, s, priv, pub, 2, "post.create", map[string]any{"text": "a reply to delete", "reply_to": root})
+	h := s.Handler()
+
+	del := `<button type="button" class="btn del" title="Delete this post">Delete</button>`
+	for _, path := range []string{"/", "/p/" + root} {
+		_, body := get(t, h, path)
+		if got, want := strings.Count(body, del), 1+strings.Count(path, "/p/"); got != want {
+			t.Errorf("%s carries %d Delete buttons, want %d", path, got, want)
+		}
+		if !strings.Contains(body, `class="post" id="`+root+`" data-au="`+me+`"`) {
+			t.Errorf("%s: the post does not stand on its author's id", path)
+		}
+		// down until a script says whose posts these are, and shown by the
+		// id alone — never by the wallet class, which any signed-in reader wears
+		if !strings.Contains(body, ".foot .del { display: none;") || !strings.Contains(body, ".foot.own { display: none; }") ||
+			strings.Contains(body, ".wallet .foot .del") {
+			t.Errorf("%s: the Delete button is not kept to the reader's own posts", path)
+		}
+		if !strings.Contains(body, `'.post[data-au="' + w.id + '"] .del { display: inline-block; } .post[data-au="' + w.id + '"] .foot.own { display: flex; }'`) ||
+			!strings.Contains(body, `remember({ name: me.name, address: me.address, id: st.v.profile })`) {
+			t.Errorf("%s: no script writes the own-post rule", path)
+		}
+		if !strings.Contains(body, `sendOp("post.delete", { post: post.id }, tell)`) {
+			t.Errorf("%s: the button sends no post.delete", path)
+		}
+	}
+	// it stands at the right end of the line the post already has — Reply
+	// in a thread, the reply count on a root — and on one of its own where
+	// the post has neither
+	_, thread := get(t, h, "/p/"+root)
+	if !strings.Contains(thread, `<a class="rlink" role="button" href="/p/`+reply+`">Reply</a>`+del+`</div>`) {
+		t.Error("the reply's Delete button does not close its Reply line")
+	}
+	// on the feed, the root's line is its reply count and the Delete button
+	// closes it; a post nobody answered gets a line of its own
+	ingest(t, s, priv, pub, 3, "post.create", map[string]any{"text": "a post nobody answered"})
+	_, feed := get(t, h, "/")
+	i := strings.Index(feed, `<div class="foot"><a class="count"`)
+	if i < 0 || !strings.HasSuffix(feed[i:i+strings.Index(feed[i:], "</div>")+6], del+`</div>`) {
+		t.Error("the Delete button does not close the count line")
+	}
+	if !strings.Contains(feed, `<div class="foot own">`+del+`</div>`) {
+		t.Error("a post with no foot line of its own does not get one for Delete")
+	}
+	if got := strings.Count(feed, `class="foot`); got != 2 {
+		t.Errorf("the feed's two posts carry %d foot lines, want one each", got)
+	}
+	// a page without the Post window: the line is there with the post, and
+	// nothing on the page can ever show it
+	for _, path := range []string{"/u/" + me, "/search?q=post", "/p/" + root + "/replies"} {
+		_, body := get(t, h, path)
+		if !strings.Contains(body, `data-au="`+me+`"`) {
+			t.Errorf("%s: a post without its author's id", path)
+		}
+		if strings.Contains(body, `.foot.own { display: flex; }`) {
+			t.Errorf("%s shows a Delete line with no way to sign in", path)
+		}
+	}
+	// the other two languages say it in their own words, on the button and
+	// in the title that explains what a press does
+	for _, lang := range []string{"zh", "ja"} {
+		w := webStrings[lang]
+		_, body := get(t, h, "/?lang="+lang)
+		if !strings.Contains(body, `class="btn del" title="`+w["delete.title"]+`">`+w["delete"]+`</button>`) {
+			t.Errorf("the %s page does not say %q on the button", lang, w["delete"])
+		}
+		if !strings.Contains(body, w["delete.again"]) || !strings.Contains(body, w["deleted"]) {
+			t.Errorf("the %s page lacks the armed title or the done line", lang)
 		}
 	}
 }

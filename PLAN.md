@@ -1147,6 +1147,30 @@ hub that carries the post.
   in opaque-origin frames and cannot reach the page's wallet code; a
   wallet extension that injects into such a frame is outside the hub's
   control.
+  **Deleting one's own post (built 2026-09-28, Livid asked for it: the
+  Hub app had the button, the pages did not).** Every post carries a
+  small **Delete** at the right end of its foot line — the line it
+  already has (Reply in a thread, the reply count on a root) or one of
+  its own — and it shows for the signed-in reader's own posts and nobody
+  else's. Whose they are is one CSS rule naming the profile id, written
+  into a `<style id="own">`: by the head script from the wallet it
+  remembers, before layout, and by the compose script from the id
+  `/v1/gate` answers with, so a post the live page swaps in carries its
+  button without being asked again and a returning reader's page never
+  jumps. The wallet remembered now holds that id beside its name and
+  address (still nothing secret); a wallet remembered before this shows
+  its buttons once the gate has answered. The first press arms the
+  button — red, and its title says a second press removes the post —
+  and the second signs one `post.delete`, which the hub takes from the
+  post's own author alone (the store checks ownership; `policy` lets a
+  delete past gate and cooldown). A press anywhere else disarms it,
+  three seconds disarm it, and signing out takes the buttons with it.
+  The post leaves the page at once and the live feed brings the delete
+  in; a page whose own post is gone goes back to the feed, keeping the
+  reader's language. Only pages with the Post window can delete, as
+  only they can post: a profile page, a search or a paged feed shows no
+  button. The Hub app's is the same button on the same foot
+  (`sysapps/hub`, `.p-del`).
 - Icons: `/favicon.ico` (32 + 16) and `/apple-touch-icon.png` (180, the
   icon at 5x on the desktop's lavender), drawn from the Hub app's 32px
   pixel art and embedded in the binary; the search and error pages use

@@ -9,7 +9,14 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <script>const HUB = {{.JS}}, T = (k, v) => { const s = HUB.s[k] === undefined ? k : HUB.s[k]; return v ? s.replace(/\{(\w+)\}/g, (m, n) => n in v ? v[n] : m) : s; };</script>
 {{if .PushKey}}<script>if ("serviceWorker" in navigator && "PushManager" in window && "Notification" in window) document.documentElement.classList.add("push");</script>
-{{end}}{{if .Compose}}<script>document.documentElement.classList.add("js"); try { if (localStorage.getItem("exe-hub-wallet")) document.documentElement.classList.add("wallet"); } catch (e) {}</script>
+{{end}}{{if .Compose}}<script>document.documentElement.classList.add("js");
+// the wallet remembered from the last visit: its class shows the Reply
+// links, and the rule written here shows Delete under that id's own
+// posts — both before layout, so a returning reader's page never jumps
+try { const w = JSON.parse(localStorage.getItem("exe-hub-wallet") || "null");
+  if (w) document.documentElement.classList.add("wallet");
+  if (w && /^[0-9a-f]{16}$/.test(w.id || "")) document.head.appendChild(Object.assign(document.createElement("style"), { id: "own", textContent: '.post[data-au="' + w.id + '"] .del { display: inline-block; } .post[data-au="' + w.id + '"] .foot.own { display: flex; }' }));
+} catch (e) {}</script>
 {{end}}{{if eq .Page "stats"}}{{template "statshead" .StatsPage}}
 {{end}}<meta name="theme-color" content="#cccccc">
 {{if .Canonical}}<link rel="canonical" href="{{.Base}}{{.Path}}">
@@ -677,6 +684,24 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
    reply's own page, whose window answers it. */
 .foot.re { display: none; }
 .wallet .foot.re { display: flex; }
+/* Delete, under one's own post: the Hub app carries the same button on a
+   post's foot (sysapps/hub, .p-del), and the pages now do too. It shows
+   for the reader's own posts and nobody else's — the rule naming their
+   profile id stands in a <style id="own"> of its own, written by the head
+   script for the id remembered before layout and by the compose script
+   for the id the gate names — so it is down until then, and a page
+   without the Post window never shows it at all. It stands at the right
+   end of the foot line the post already has, or on one of its own when
+   the post has none, in the small size the Replay button under a drawing
+   wears; the word is the danger colour, and the first press arms the
+   button red, as the Hub app's does. */
+.foot.own { display: none; }
+.foot .del { display: none; margin: 0 0 0 auto; min-width: 0; height: auto;
+  padding: 1px 8px; font-size: 10px; font-family: inherit; color: #7a1010; }
+.foot .del.armed { background: #cc3333; color: #fff;
+  box-shadow: inset 1px 1px 0 #e88, inset -1px -1px 0 #911; }
+.foot .del.armed:active { background: #a02525; color: #fff;
+  box-shadow: inset 1px 1px 0 #911, inset -1px -1px 0 #e88; }
 /* a word too long for the line breaks where it must rather than
    pushing the page sideways; the gate's mint, 44 characters of code and
    too long for any phone, carries a <wbr> at its middle and breaks
@@ -1568,6 +1593,11 @@ document.addEventListener("change", e => {
   const remember = v => { try { v ? localStorage.setItem(KEY, JSON.stringify(v)) : localStorage.removeItem(KEY); } catch (e) {} };
   const recall = () => { try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { return null; } };
   const declined = e => e && (e.code === 4001 || /reject|declin|cancel|denied/i.test(e.message || ""));
+  // which posts are the reader's own: one CSS rule, so a post the live
+  // page swaps in carries its Delete button without being asked again
+  const ownCSS = document.getElementById("own") || document.head.appendChild(Object.assign(document.createElement("style"), { id: "own" }));
+  let armTimer; // the Delete button armed by one press, disarmed after three seconds
+  const showOwn = id => { if (ownCSS) ownCSS.textContent = /^[0-9a-f]{16}$/.test(id || "") ? '.post[data-au="' + id + '"] .del { display: inline-block; } .post[data-au="' + id + '"] .foot.own { display: flex; }' : ""; };
   // SHA-256 as hex, for the upload signature: the browser's own where the
   // page is a secure context (https, localhost); this small one where it
   // is not — the host hub is plain http on its Tailscale address, and
@@ -1741,6 +1771,11 @@ document.addEventListener("change", e => {
     verdict = st.v;
     until = Date.now() + st.v.wait * 1000;
     me.profile = st.profile;
+    // the id the gate names is this wallet's account: the Delete buttons
+    // under its own posts follow it, and it is remembered so the next
+    // visit shows them before layout (the head script writes the rule)
+    showOwn(st.v.profile);
+    remember({ name: me.name, address: me.address, id: st.v.profile });
     q(".id").textContent = st.v.profile;
     q(".id").title = me.address;
     q(".name").textContent = st.profile && st.profile.name ? st.profile.name : T("noname");
@@ -1775,6 +1810,8 @@ document.addEventListener("change", e => {
   function signedOut() {
     verdict = null; flash = ""; until = 0;
     if (target) { target = null; showTarget(); } // the Reply links go with the wallet, and so does their aim
+    showOwn(""); // and so do the Delete buttons
+    disarm();
     remember(null);
     root.classList.remove("wallet");
     meAva("");
@@ -2059,6 +2096,53 @@ document.addEventListener("change", e => {
       if (target && gone !== !!target.gone) { target.gone = gone; render(); }
     }).observe(head.parentNode, { childList: true });
   }
+  // ---- deleting one's own post (PLAN.md, Posting from a wallet) ----
+  // Every post carries a Delete button on a foot line of its own, shown
+  // by the own-post rule for the posts this wallet wrote; the Hub app has
+  // the same button on a post's foot. The first press arms it — red, and
+  // its title says what a second press does — and a second press within
+  // three seconds signs one post.delete, which the hub takes from the
+  // post's own author and nobody else (store.go). A press anywhere else
+  // disarms it, and so does signing out. The post is taken off the page
+  // at once and the live page brings the delete in by itself; a page with
+  // no live feed loads again, and a thread page whose own post is gone
+  // goes back to the feed in the reader's language.
+  function disarm() {
+    clearTimeout(armTimer);
+    for (const b of document.querySelectorAll("button.del.armed")) {
+      b.classList.remove("armed");
+      b.title = T("delete.title");
+    }
+  }
+  const feedHref = () => { const l = new URLSearchParams(location.search).get("lang"); return l ? "/?lang=" + encodeURIComponent(l) : "/"; };
+  document.addEventListener("click", async e => {
+    const b = e.target instanceof Element && e.target.closest("button.del");
+    const post = b && b.closest(".post");
+    const ready = !!b && b.classList.contains("armed");
+    if (!ready) disarm();
+    if (!post || !me || busy) return;
+    if (!ready) {
+      b.classList.add("armed");
+      b.title = T("delete.again");
+      armTimer = setTimeout(disarm, 3000);
+      return;
+    }
+    disarm();
+    busy = true;
+    render();
+    try {
+      await sendOp("post.delete", { post: post.id }, tell);
+      done(T("deleted"));
+      if (post.id === replyTo) { location.href = feedHref(); return; }
+      post.remove();
+      if (window.hubRefresh) window.hubRefresh(); else location.reload();
+    } catch (err) {
+      flash = err.message;
+    } finally {
+      busy = false;
+      render();
+    }
+  });
   // The post as the window stands: the words, the reply it answers, and
   // what is attached, which is a drawing or nothing. Post sends it, and
   // so does the pad's Send, so the words, the mentions and the reply
@@ -2944,7 +3028,13 @@ document.addEventListener("change", e => {
 
 {{define "bell"}}<svg viewBox="0 0 14 14" aria-hidden="true"><path class="k" d="M6 0h2v1h-2zM5 1h1v1h-1zM8 1h1v1h-1zM4 2h1v1h-1zM9 2h1v1h-1zM3 3h1v1h-1zM10 3h1v1h-1zM3 4h1v1h-1zM10 4h1v1h-1zM3 5h1v1h-1zM10 5h1v1h-1zM3 6h1v1h-1zM10 6h1v1h-1zM2 7h1v1h-1zM11 7h1v1h-1zM1 8h1v1h-1zM12 8h1v1h-1zM0 9h1v1h-1zM13 9h1v1h-1zM0 10h14v1h-14zM5 11h4v1h-4zM6 12h2v1h-2z"/><path class="s" d="M7 1h1v1h-1zM8 2h1v1h-1zM9 3h1v1h-1zM9 4h1v1h-1zM9 5h1v1h-1zM9 6h1v1h-1zM10 7h1v1h-1zM10 8h2v1h-2zM1 9h12v1h-12z"/><path class="f" d="M6 1h1v1h-1zM6 2h2v1h-2zM5 3h4v1h-4zM5 4h4v1h-4zM5 5h4v1h-4zM4 6h5v1h-5zM3 7h7v1h-7zM2 8h8v1h-8z"/><path class="w" d="M5 2h1v1h-1zM4 3h1v1h-1zM4 4h1v1h-1zM4 5h1v1h-1z"/></svg>{{end}}
 
-{{define "post"}}<div class="post{{if .ReplyTo}} reply{{end}}{{if gt .Depth 1}} deep{{end}}{{if .Quote}} qhead{{end}}{{if .QuoteRun}} qrun{{end}}" id="{{.ID}}"{{if gt .Depth 1}} style="--d:{{.Depth}}"{{end}}>
+{{/* Delete, at the right end of the post's foot line — the line the post
+     already has (Reply in a thread, the reply count in a feed) or one of
+     its own. Down for everyone until a script says whose posts these are:
+     see the .del and .foot.own rules. */}}
+{{define "del"}}<button type="button" class="btn del" title="{{T "delete.title"}}">{{T "delete"}}</button>{{end}}
+
+{{define "post"}}<div class="post{{if .ReplyTo}} reply{{end}}{{if gt .Depth 1}} deep{{end}}{{if .Quote}} qhead{{end}}{{if .QuoteRun}} qrun{{end}}" id="{{.ID}}" data-au="{{.Author}}"{{if gt .Depth 1}} style="--d:{{.Depth}}"{{end}}>
   {{with .Quote}}<a class="quote" href="/p/{{.ID}}{{$.Q}}"><b>{{.Name}}</b>{{if .Text}} {{.Text}}{{end}}</a>{{end}}
   <a class="av" href="/u/{{.Author}}{{.Q}}">{{if .Avatar}}<img src="/v1/embed/{{.Avatar}}" alt="">{{else}}<img class="idn" src="/v1/identicon/{{.Author}}.svg" alt="">{{end}}</a>
   <div>
@@ -2953,8 +3043,9 @@ document.addEventListener("change", e => {
     {{if .Card}}<div class="card"><a class="cm" href="{{.Card.URL}}" target="_blank" rel="noopener nofollow">{{if .Card.Image}}<span class="ci"><img src="/v1/embed/{{.Card.Image}}" alt="" loading="lazy"></span>{{end}}<span class="cb"><span class="ct">{{.Card.Title}}</span>{{if .Card.Desc}}<span class="cd">{{.Card.Desc}}</span>{{end}}<span class="ch">{{.Card.Host}}</span></span></a>{{if .Card.Archive}}<a class="arch" href="{{.Card.Archive}}" target="_blank" rel="noopener nofollow">{{T "archived"}}{{with .Card.ArchiveDate}} · {{.}}{{end}}</a>{{end}}</div>{{end}}
     {{with .PostCard}}<div class="card qcard"><a class="cm" href="/p/{{.ID}}{{$.Q}}">{{if .Image}}<span class="ci"><img src="/v1/embed/{{.Image}}" alt="" loading="lazy"></span>{{end}}<span class="cb"><span class="qh"><span class="qav">{{if .Avatar}}<img src="/v1/embed/{{.Avatar}}" alt="">{{else}}<img class="idn" src="/v1/identicon/{{.Author}}.svg" alt="">{{end}}</span><b>{{.Name}}</b><span class="mono">{{.Author}}</span><span class="qw">· <time datetime="{{.Stamp}}">{{.When}}</time></span></span>{{if .Text}}<span class="qt">{{.Text}}</span>{{end}}</span></a></div>{{end}}
     {{if or .Images .Pictures .Videos .Sounds .Files .Pages}}<div class="embeds">{{range .Images}}{{if .Drawing}}<div class="drawing"><a class="pic" href="/v1/embed/{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "picture"}}{{end}}"><img class="draw" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" data-src="/v1/embed/{{.CID}}" data-w="{{.Width}}" data-h="{{.Height}}" style="width:{{.Width}}px;height:{{.Height}}px" alt="{{.Alt}}"><noscript><img class="draw" src="/v1/embed/{{.CID}}" width="{{.Width}}" height="{{.Height}}" loading="lazy" alt=""></noscript></a><button type="button" class="btn again">{{T "replay"}}</button></div>{{else}}<a class="pic" href="/v1/embed/{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "picture"}}{{end}}"><img src="/v1/embed/{{.CID}}" alt="{{.Alt}}"></a>{{end}}{{end}}{{range .Pictures}}<a class="pic" href="/v1/embed/{{.CID}}" data-name="{{.Name}}" title="{{.URL}}"><img src="/v1/embed/{{.CID}}" alt=""></a>{{end}}{{range .Videos}}<div class="vid"{{if .Loop}} data-loop{{end}} style="{{.Box}}"><video src="/v1/embed/{{.CID}}"{{if .Poster}} poster="/v1/embed/{{.Poster}}"{{end}}{{if .Loop}} autoplay loop muted playsinline preload="auto"{{else}} controls playsinline preload="{{if .Poster}}none{{else}}metadata{{end}}"{{end}}{{if .Alt}} aria-label="{{.Alt}}"{{end}}></video></div>{{end}}{{range .Sounds}}<div class="aud">{{if .Poster}}<img class="wave" src="/v1/embed/{{.Poster}}" alt="">{{end}}<audio controls preload="none" src="/v1/embed/{{.CID}}"></audio><span class="afoot">{{if .Filename}}{{.Filename}}{{else}}{{T "sound"}}{{end}}{{with .Length}} · {{.}}{{end}}</span></div>{{end}}{{range .Pages}}<div><a class="page" href="/v1/embed/{{.CID}}" data-cid="{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "page"}}{{end}}">{{if .Filename}}{{.Filename}}{{else}}{{T "page"}}{{end}}</a><a class="pagedl" href="/v1/embed/{{.CID}}" download>{{T "download"}}</a></div>{{end}}{{range .Files}}<a class="file" href="/v1/embed/{{.CID}}">{{if .Filename}}{{.Filename}}{{else}}{{.CID}}{{end}} ({{.MIME}})</a>{{end}}</div>{{end}}
-    {{if .InThread}}<div class="foot re"><a class="rlink" role="button" href="/p/{{.ID}}{{.Q}}">{{T "reply"}}</a></div>{{end}}
-    {{if and (not .ReplyTo) .Replies}}<div class="foot"><a class="count" href="/p/{{.ID}}{{.Q}}">{{T "replies" "n" .Replies}} ▸</a>{{with .Latest}}<a class="latest" href="{{.Href}}"><b>{{.Name}}</b> {{.Text}}</a>{{end}}</div>{{end}}
+    {{if .InThread}}<div class="foot re"><a class="rlink" role="button" href="/p/{{.ID}}{{.Q}}">{{T "reply"}}</a>{{template "del" .}}</div>
+    {{else if and (not .ReplyTo) .Replies}}<div class="foot"><a class="count" href="/p/{{.ID}}{{.Q}}">{{T "replies" "n" .Replies}} ▸</a>{{with .Latest}}<a class="latest" href="{{.Href}}"><b>{{.Name}}</b> {{.Text}}</a>{{end}}{{template "del" .}}</div>
+    {{else}}<div class="foot own">{{template "del" .}}</div>{{end}}
   </div>
 </div>
 {{end}}
