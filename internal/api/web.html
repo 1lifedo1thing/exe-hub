@@ -1798,7 +1798,12 @@ document.addEventListener("change", e => {
       if (!silent) note.textContent = declined(e) ? T("declined") : T("noconnect", { err: e.message || e });
       return;
     }
-    remember({ name: me.name, address: me.address });
+    // the same wallet as last time keeps its remembered id, so its own
+    // posts wear their Delete buttons from the first paint; another
+    // account's do not — the buttons stand down until the gate names it
+    const before = recall(), same = before && before.address === me.address;
+    if (!same) { showOwn(""); disarm(); }
+    remember({ name: me.name, address: me.address, id: same ? before.id : undefined });
     root.classList.add("wallet");
     q(".name").textContent = "…";
     q(".id").textContent = short(me.address);
