@@ -81,3 +81,40 @@ func TestWebRepliesFrame(t *testing.T) {
 		t.Error("the thread page changed")
 	}
 }
+
+// TestWebRepliesFramePaper: ?look=paper is the same frame drawn for a
+// page that is not Platinum — the look class, the reader's light or
+// dark, Noto Serif with the CJK face the page's words are in — and the
+// look, like the language, rides the pager's links, which stay in the
+// frame. Without it the frame is as it was.
+func TestWebRepliesFramePaper(t *testing.T) {
+	s := testServer(t, &config.Config{Gate: config.Gate{Mode: "open"}})
+	site, sitePriv, _ := ed25519.GenerateKey(nil)
+	ann, annPriv, _ := ed25519.GenerateKey(nil)
+	root := ingest(t, s, sitePriv, site, 1, "post.create", map[string]any{"text": "a blog post"})
+	for i := 1; i <= webThreadPage+1; i++ {
+		ingest(t, s, annPriv, ann, int64(i), "post.create", map[string]any{"text": "reply", "reply_to": root})
+	}
+	h := s.Handler()
+	_, body := get(t, h, "/p/"+root+"/replies?look=paper&lang=zh-Hans")
+	for _, want := range []string{
+		`<html lang="zh-Hans" class="framed paper">`, `<meta name="color-scheme" content="light dark">`,
+		`family=Noto+Serif:ital,wght@0,100..900;1,100..900&family=Noto+Serif+SC:wght@200..900`,
+		`.paper .post`, `href="/p/` + root + `/replies?lang=zh-hans&amp;look=paper&amp;page=2"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("paper frame lacks %q", want)
+		}
+	}
+	_, body = get(t, h, "/p/"+root+"/replies?look=paper&page=2")
+	if !strings.Contains(body, `href="/p/`+root+`/replies?look=paper"`) {
+		t.Error("page 2's Prev drops the look")
+	}
+	if _, body = get(t, h, "/p/"+root+"/replies?look=paper&lang=ja"); !strings.Contains(body, `Noto+Serif+JP`) {
+		t.Error("a Japanese frame is not set in Noto Serif JP")
+	}
+	_, body = get(t, h, "/p/"+root+"/replies?look=wood")
+	if !strings.Contains(body, `class="framed"`) || strings.Contains(body, "fonts.googleapis.com") || strings.Contains(body, "look=") {
+		t.Error("an unknown look changed the frame")
+	}
+}

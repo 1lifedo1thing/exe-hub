@@ -1,5 +1,5 @@
 {{define "page"}}<!DOCTYPE html>
-<html lang="{{.L.Tag}}"{{if eq .Page "frame"}} class="framed"{{end}}>
+<html lang="{{.L.Tag}}"{{if eq .Page "frame"}} class="framed{{if .Look}} {{.Look}}{{end}}"{{end}}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -39,7 +39,11 @@ try { const w = JSON.parse(localStorage.getItem("exe-hub-wallet") || "null");
 <meta property="article:author" content="{{.Base}}/u/{{.Post.Author}}">
 {{end}}{{if .Profile}}<meta property="profile:username" content="{{.Profile.Name}}">
 {{end}}{{if eq .Page "search"}}<meta name="robots" content="noindex">{{end}}{{if eq .Page "frame"}}<meta name="robots" content="noindex">
-<base target="_blank">{{end}}
+<base target="_blank">{{end}}{{if eq .Look "paper"}}
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,100..900;1,100..900&family=Noto+Serif+{{if eq .L.Code "ja"}}JP{{else}}SC{{end}}:wght@200..900&display=swap">{{end}}
 <style>
 /* The Platinum chrome — the window with its striped bar, hard shadow and
    close box, the sunken frame, the status strip and the push button —
@@ -758,6 +762,94 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
    in from there as the thread page steps it */
 .framed .post.reply { padding-left: min(calc(12px + (var(--d, 1) - 1) * 22px), 40%); }
 .framed .post.reply:not(.deep) { background: #fff; }
+/* The replies frame in the paper look (?look=paper), for a page that
+   is not Platinum — exe-planet's Paper template, one column of Noto Serif
+   on grey paper grain: the rows have no ground of their own, so the
+   page's paper shows through; Noto Serif, CJK face first as Paper sets
+   it (English text in Noto Serif's own); hairlines in the page's ink
+   where Platinum draws black lines and grey fields; light or dark as
+   the reader's system is, as Paper is. The colours are Paper's, copied. */
+.paper {
+  --ground: #e3e2de; --ink: #22211f; --quiet: #6f6c66; --faint: #9a968f;
+  --rule: rgba(34, 33, 31, .16); --line: rgba(34, 33, 31, .34); --wash: rgba(34, 33, 31, .05);
+  --field: rgba(255, 255, 255, .38); --idn: #e6e6f5;
+  --serif: "Noto Serif SC", "Noto Serif", "Songti SC", "STSong", serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  color-scheme: light dark;
+}
+.paper:lang(ja) { --serif: "Noto Serif JP", "Noto Serif", "Hiragino Mincho ProN", "Yu Mincho", serif; }
+.paper:lang(en) { --serif: "Noto Serif", "Noto Serif SC", Georgia, serif; }
+@media (prefers-color-scheme: dark) {
+  .paper {
+    --ground: #1d1d1b; --ink: #dddad3; --quiet: #9a968e; --faint: #6e6b65;
+    --rule: rgba(221, 218, 211, .15); --line: rgba(221, 218, 211, .35); --wash: rgba(221, 218, 211, .06);
+    --field: rgba(0, 0, 0, .2); --idn: #3a3a48;
+  }
+}
+.paper body { background: transparent; color: var(--ink); cursor: auto;
+  font: 400 16px/1.8 var(--serif); text-autospace: normal; line-break: strict; -webkit-font-smoothing: antialiased; }
+@media (max-width: 480px) { .paper body { font-size: 15px; } }
+.paper a { color: inherit; }
+.paper .frame { background: transparent; }
+.paper .post, .paper .post.reply, .paper .post.reply:not(.deep) { background: transparent; border-color: var(--rule);
+  grid-template-columns: 20px minmax(0, 1fr); gap: 10px; padding-top: 14px; padding-bottom: 15px; padding-right: 0; }
+.paper .post.reply { padding-left: min(calc((var(--d, 1) - 1) * 24px), 40%); }
+.paper .post.reply.deep { border-left: 0; }
+.paper .post:target { background: var(--wash); }
+.paper .av, .paper .post.reply .av { width: 20px; height: 20px; margin-top: 3px; border: 0; background: none; }
+.paper .av img, .paper .post.reply .av img { width: 20px; height: 20px; }
+.paper .av img.idn, .paper .post.reply .av img.idn { width: 10px; height: 10px; padding: 5px; background: var(--idn); }
+.paper .meta { color: var(--faint); font-size: 13px; line-height: 20px; text-autospace: no-autospace; }
+.paper .meta b { color: var(--ink); font-size: 14px; font-weight: 600; }
+.paper .meta a:hover { text-decoration: none; color: var(--ink); }
+.paper .mono { font-family: var(--mono); font-size: 11px; }
+.paper .text { margin-top: 4px; }
+.paper .text:lang(en) { font-family: "Noto Serif", var(--serif); }
+.paper .text:lang(ja) { font-family: "Noto Serif JP", var(--serif); }
+.paper .text a { text-decoration-thickness: 1px; text-underline-offset: .22em; text-decoration-color: var(--line); }
+.paper .text h1 { font-size: 18px; } .paper .text h2 { font-size: 17px; } .paper .text h3 { font-size: 16px; }
+.paper .text li::before { color: var(--faint); }
+.paper .text li.box::before { top: 5px; border-color: var(--quiet); background: transparent; box-shadow: none; color: var(--ink); }
+.paper .text li.box.done { color: var(--faint); }
+.paper .text .tbl { border-color: var(--rule); background: transparent; }
+.paper .text th, .paper .text td { font-size: 14px; border-color: var(--rule); }
+.paper .text th { background: var(--wash); border-bottom-color: var(--line); }
+.paper .text pre { border: 0; background: var(--wash); color: var(--ink); font: 12px/18px var(--mono); padding: 8px 10px; }
+.paper .text .code.one pre { padding-top: 5px; padding-bottom: 5px; line-height: 18px; }
+.paper code { font: 13px var(--mono); background: var(--wash); padding: 0 3px; }
+.paper .text mark { background: rgba(255, 221, 0, .35); }
+.paper .trl { color: var(--faint); font-size: 12px; line-height: 18px; }
+.paper .trl a:hover { text-decoration: none; color: var(--ink); }
+.paper .card { border-color: var(--rule); background: var(--field); box-shadow: none; }
+.paper .card .cm { color: var(--ink); }
+.paper .card .ci { border-right-color: var(--rule); }
+.paper .card .ct { font-weight: 600; }
+.paper .card .cd, .paper .card .ch, .paper .card .qh { color: var(--faint); font-size: 12px; }
+.paper .card .qh b { color: var(--ink); font-size: 13px; }
+.paper .card .qav { border: 0; background: none; }
+.paper .card .arch { background: var(--wash); }
+.paper .embeds img { border: 0; }
+.paper .embeds .vid { border: 0; }
+.paper .embeds .aud { border-color: var(--rule); background: var(--field); box-shadow: none; }
+.paper .embeds .aud .wave { border-bottom-color: var(--rule); background: var(--wash); }
+.paper .embeds .aud .afoot { background: var(--wash); color: var(--faint); font-size: 12px; }
+.paper .embeds .page { border-color: var(--rule); background: var(--field); color: var(--ink); box-shadow: none; }
+.paper .foot { font-size: 13px; }
+.paper .foot a { color: var(--faint); }
+.paper .foot a:hover { text-decoration: none; color: var(--ink); }
+/* a push button here is a plain one: a hairline box round its word, as
+   Paper draws its own (Replay under a drawing, Copy beside code, Delete,
+   the pager's Prev and Next) */
+.paper .btn { height: auto; min-width: 0; padding: 1px 10px; border: 1px solid var(--line); border-radius: 0; box-shadow: none;
+  background: transparent; color: var(--ink); font: inherit; font-size: 13px; line-height: 20px; font-weight: 400; cursor: pointer; }
+.paper .btn:active { background: var(--wash); color: var(--ink); box-shadow: none; }
+.paper .text .copy .gl .w, .paper .text .copy:active .gl .w { fill: var(--ground); }
+.paper .foot .del { color: #a33; font-size: 12px; }
+.paper .foot .del.armed, .paper .foot .del.armed:active { background: #b33; color: #fff; border-color: #b33; box-shadow: none; }
+.paper .pager { background: transparent; box-shadow: none; border-color: var(--rule); color: var(--faint); font-size: 13px; padding: 10px 0; }
+/* no replies yet: the one quiet line, as tall as the frame Paper holds
+   open for it before the hub says, so nothing under it moves */
+.paper .pad { padding: 16px 0; color: var(--faint); font-size: 15px; line-height: 24px; }
 </style>
 {{if eq .Page "stats"}}{{template "statscss"}}{{end}}<noscript><style>.embeds .pic > img.draw { display: none; }</style></noscript>
 </head>

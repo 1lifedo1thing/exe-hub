@@ -2816,6 +2816,19 @@ post) and the replies frame.
   - a whole id this hub does not hold (yet) answers the empty state, not
     404, and stays live: a reply may name a root that arrives later;
   - counted by stats as its own lane, `frame`, not `thread`.
+  - `?look=paper` (2026-09-28) draws the rows for a page that is not
+    Platinum — exe-planet's Paper template, one column of Noto Serif on
+    grey paper grain: `html.framed.paper`, no ground of its own so the
+    page's paper shows through (both documents say `color-scheme: light
+    dark`, so the frame stays transparent in dark too), Noto Serif from
+    Google Fonts with the CJK face first (JP for a Japanese frame, else
+    SC; a text whose language is English in Noto Serif's own), Paper's
+    ink colours, hairlines where Platinum draws black lines and grey
+    fields, plain hairline buttons, and the empty line exactly 56px, the
+    height Paper holds open for it. The look rides the pager's links;
+    anything else is the Platinum frame as before. Paper asks for it
+    with the site's language as `?lang=`, so the rows read in the
+    language of the page around them.
   The hub sends no frame headers today, so any page may frame it; the
   frame changes nothing else on the thread page.
 - **Answering from a blog** (Livid, 2026-09-26). A commenter is a

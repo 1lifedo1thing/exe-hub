@@ -461,6 +461,7 @@ type webData struct {
 	Pages, From, To    int
 	PrevHref, NextHref string
 	Root               string      // the thread's root, which the live frame names for its filter
+	Look               string      // the replies frame's look: "" (Platinum rows on white) or "paper" (see handleRepliesFrame)
 	Summary            *webSummary // the thread's newest summary, in the window beside it (PLAN.md, Thread summaries)
 	Profile            *store.Profile
 	Invite             *store.Invite // an invited key's profile: who let it past the gate (PLAN.md, Invites)
@@ -1788,6 +1789,11 @@ func (s *Server) handleThreadPage(w http.ResponseWriter, r *http.Request) {
 // reply may name it first. The page may be framed by anyone; its links
 // open in a new tab so the reader keeps the page they were on, and it
 // tells the page that frames it how tall it is.
+//
+// ?look=paper draws the rows for a page that is not Platinum (the Paper
+// site template): no ground of their own, so the page's shows through,
+// in Noto Serif, with hairlines for rules, light or dark as the reader's
+// system is. The look rides the pager's links, which stay in the frame.
 func (s *Server) handleRepliesFrame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if len(id) != 64 || strings.Trim(id, "0123456789abcdef") != "" {
@@ -1836,17 +1842,30 @@ func (s *Server) handleRepliesFrame(w http.ResponseWriter, r *http.Request) {
 		Page: "frame", Title: rd.L.T("reply.frame", "host", r.Host), Replies: replies, Count: len(thread),
 		Root: root, Live: s.Events != nil, Lang: rd.Lang, Q: rd.Q,
 	}
+	if r.URL.Query().Get("look") == "paper" {
+		d.Look = "paper"
+	}
 	if pages > 1 {
 		d.Pages, d.From, d.To = pages, from+1, to
 		self := "/p/" + id + "/replies"
+		// the frame's own query: the page number, the look, the language
+		q := func(pairs ...string) string {
+			if d.Look != "" {
+				pairs = append(pairs, "look", d.Look)
+			}
+			if len(pairs) == 0 {
+				return rd.Q
+			}
+			return rd.with(pairs...)
+		}
 		if page > 1 {
-			d.PrevHref = self + rd.Q
+			d.PrevHref = self + q()
 			if page > 2 {
-				d.PrevHref = self + rd.with("page", strconv.Itoa(page-1))
+				d.PrevHref = self + q("page", strconv.Itoa(page-1))
 			}
 		}
 		if page < pages {
-			d.NextHref = self + rd.with("page", strconv.Itoa(page+1))
+			d.NextHref = self + q("page", strconv.Itoa(page+1))
 		}
 	}
 	w.Header().Set("X-Robots-Tag", "noindex")
