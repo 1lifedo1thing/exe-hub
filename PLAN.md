@@ -2829,6 +2829,29 @@ post) and the replies frame.
     anything else is the Platinum frame as before. Paper asks for it
     with the site's language as `?lang=`, so the rows read in the
     language of the page around them.
+  - **The frame follows the script** (2026-09-28, Codex on Spark's
+    find, Livid: "Improve it."): a reader who asks for Traditional
+    Chinese — `?lang=zh-Hant`, or a browser whose first language is
+    zh-TW, zh-HK, zh-MO or zh-Hant — got `<html lang="zh-Hans">`,
+    Simplified labels and, in the paper look, SC glyphs, because the
+    pages fold every Chinese into the Simplified column. The frame now
+    picks its own locale (`webFrameLocale`): a fourth column of
+    `webStrings`, `zh-hant`, written as Taiwan writes (貼文, 登入, 儲存),
+    under `<html lang="zh-Hant">`, in either look; a translated row's
+    note names its language in Traditional (`lang.ChineseHant`). In the
+    paper look the frame's own face is Noto Serif TC, and a text in
+    another script is set in that script's face (`.paper
+    .text:lang(zh-Hans)` in SC, `zh-Hant` in TC, `ja` in JP, `en` in
+    Noto Serif), so the Simplified translation a Traditional reader is
+    given — translations exist in zh-Hans, en and ja — keeps Simplified
+    glyphs. The page loads the faces its rows need (`webData.Faces`:
+    the frame's own, and one for each language among its texts), not
+    all three. The hub's own pages still fold Traditional into
+    Simplified: the column is whole (TestWebStrings holds it to the
+    same keys), but the join window's per-language blocks, the
+    language menu and the skill text have no Traditional yet.
+    `TestWebRepliesFrameHant`; exe-planet-paper-test.js builds a
+    Traditional site and reads the frame in it.
   The hub sends no frame headers today, so any page may frame it; the
   frame changes nothing else on the thread page.
 - **Answering from a blog** (Livid, 2026-09-26). A commenter is a

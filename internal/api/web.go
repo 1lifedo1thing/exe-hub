@@ -460,9 +460,10 @@ type webData struct {
 	// the thread, and the neighbouring pages' numbers, 0 at either end
 	Pages, From, To    int
 	PrevHref, NextHref string
-	Root               string      // the thread's root, which the live frame names for its filter
-	Look               string      // the replies frame's look: "" (Platinum rows on white) or "paper" (see handleRepliesFrame)
-	Summary            *webSummary // the thread's newest summary, in the window beside it (PLAN.md, Thread summaries)
+	Root               string          // the thread's root, which the live frame names for its filter
+	Look               string          // the replies frame's look: "" (Platinum rows on white) or "paper" (see handleRepliesFrame)
+	Faces              map[string]bool // the paper look: the Noto Serif CJK faces the page loads, by SC, TC and JP
+	Summary            *webSummary     // the thread's newest summary, in the window beside it (PLAN.md, Thread summaries)
 	Profile            *store.Profile
 	Invite             *store.Invite // an invited key's profile: who let it past the gate (PLAN.md, Invites)
 	Since              string        // the profile's first day as a UTC date, and SinceStamp its RFC 3339 form for the <time> element
@@ -1309,6 +1310,11 @@ func (rd webReading) tr(t store.Translation, names map[string]string, marks map[
 			from = t.From
 		}
 		name = lang.Chinese(from)
+	case "zh-hant":
+		if from == "zh" {
+			from = t.From
+		}
+		name = lang.ChineseHant(from)
 	case "ja":
 		name = lang.Japanese(from)
 	default:
@@ -1350,7 +1356,9 @@ func (s *Server) webTranslations(rd webReading, ids []string) map[string]store.T
 
 func (s *Server) webRender(w http.ResponseWriter, r *http.Request, code int, d *webData) {
 	d.Base, d.Host, d.Path = webBase(r), r.Host, r.URL.Path
-	d.L = webLocaleOf(r)
+	if d.L == nil { // the replies frame picks its own (webFrameLocale)
+		d.L = webLocaleOf(r)
+	}
 	d.Push = s.Push != nil
 	if l := strings.ToLower(r.URL.Query().Get("lang")); l != "" && l != "orig" {
 		d.DateLoc = l
@@ -1794,6 +1802,11 @@ func (s *Server) handleThreadPage(w http.ResponseWriter, r *http.Request) {
 // site template): no ground of their own, so the page's shows through,
 // in Noto Serif, with hairlines for rules, light or dark as the reader's
 // system is. The look rides the pager's links, which stay in the frame.
+// Its type follows the script: the frame's own face is the one its
+// language is written in (TC for a Traditional frame, JP for a Japanese
+// one, else SC), and a text in another script is set in that script's
+// face, so a Simplified translation in a Traditional frame keeps
+// Simplified glyphs. The page loads the faces its rows need, no more.
 func (s *Server) handleRepliesFrame(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if len(id) != 64 || strings.Trim(id, "0123456789abcdef") != "" {
@@ -1806,6 +1819,7 @@ func (s *Server) handleRepliesFrame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rd := webReadingOf(r)
+	rd.L = webFrameLocale(r)
 	root, names := id, map[string]string{}
 	if p, err := s.St.Post(id); err == nil {
 		names[p.ID] = authorLabel(*p)
@@ -1840,10 +1854,20 @@ func (s *Server) handleRepliesFrame(w http.ResponseWriter, r *http.Request) {
 	}
 	d := &webData{
 		Page: "frame", Title: rd.L.T("reply.frame", "host", r.Host), Replies: replies, Count: len(thread),
-		Root: root, Live: s.Events != nil, Lang: rd.Lang, Q: rd.Q,
+		Root: root, Live: s.Events != nil, Lang: rd.Lang, Q: rd.Q, L: rd.L,
 	}
 	if r.URL.Query().Get("look") == "paper" {
 		d.Look = "paper"
+		d.Faces = map[string]bool{webFace(rd.L.Tag): true}
+		for _, p := range replies {
+			d.Faces[webFace(p.Lang)] = true
+			if p.Tr != nil {
+				d.Faces[webFace(p.Tr.Lang)] = true
+			}
+		}
+		if !d.Faces["TC"] && !d.Faces["JP"] {
+			d.Faces["SC"] = true // Han in a text of no CJK language still wants a face
+		}
 	}
 	if pages > 1 {
 		d.Pages, d.From, d.To = pages, from+1, to
@@ -1870,6 +1894,20 @@ func (s *Server) handleRepliesFrame(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("X-Robots-Tag", "noindex")
 	s.webRender(w, r, http.StatusOK, d)
+}
+
+// webFace is the Noto Serif CJK face a language is set in, by its
+// family's last word: SC, TC, JP, or "" for a language that needs none.
+func webFace(tag string) string {
+	switch {
+	case strings.HasPrefix(tag, "zh-Hant"):
+		return "TC"
+	case strings.HasPrefix(tag, "zh"):
+		return "SC"
+	case strings.HasPrefix(tag, "ja"):
+		return "JP"
+	}
+	return ""
 }
 
 // handleProfilePage: a key that has posted but never sent profile.set

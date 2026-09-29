@@ -32,6 +32,10 @@ func English(tag string) string { return named(display.English.Tags(), tag) }
 // Chinese is the same name for a Chinese reader: "英语", "日语".
 func Chinese(tag string) string { return named(display.SimplifiedChinese.Tags(), tag) }
 
+// ChineseHant is the same name for a reader of Traditional Chinese:
+// "英文", "日文".
+func ChineseHant(tag string) string { return named(display.TraditionalChinese.Tags(), tag) }
+
 // Japanese is the same name for a Japanese reader: "英語", "中国語".
 func Japanese(tag string) string { return named(display.Japanese.Tags(), tag) }
 

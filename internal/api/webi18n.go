@@ -6,12 +6,15 @@ import (
 	"net/http"
 	"strings"
 
+	"exehub/internal/lang"
+
 	stats "github.com/livid/exe-stats"
 )
 
 // The pages' own words in the reader's language (PLAN.md, Public pages
 // — The pages in the reader's language). Three languages: English,
-// Simplified Chinese and Japanese; every word of chrome — the join
+// Simplified Chinese and Japanese (and Traditional Chinese in the
+// replies frame); every word of chrome — the join
 // window, the pager, the find strip, the Post window and its Profile
 // dialog, the picture viewer, the error pages, the titles, the line
 // under a translated post — comes from one table, webStrings, and a
@@ -41,6 +44,11 @@ var webLocales = map[string]*webLocale{
 	"en": {Code: "en", Tag: "en", S: webStrings["en"]},
 	"zh": {Code: "zh", Tag: "zh-Hans", S: webStrings["zh"]},
 	"ja": {Code: "ja", Tag: "ja", S: webStrings["ja"]},
+	// Traditional Chinese is no language of the pages yet: webLocaleTag
+	// looks a tag up by its base, which never names this key, so zh-TW
+	// still reads the Simplified chrome everywhere but in the replies
+	// frame, which asks for this locale itself (webFrameLocale)
+	"zh-hant": {Code: "zh-hant", Tag: "zh-Hant", S: webStrings["zh-hant"]},
 }
 
 // webLocaleOf is the language the page's own words are in: ?lang= when
@@ -56,6 +64,26 @@ func webLocaleOf(r *http.Request) *webLocale {
 	}
 	if l := webLocaleTag(webBrowserLang(r)); l != nil {
 		return l
+	}
+	return webLocales["en"]
+}
+
+// webFrameLocale is the language the replies frame's own words are in
+// (PLAN.md, Replies under a blog post): the one every page would pick,
+// except that a reader who asks for Traditional Chinese — zh-Hant, or a
+// region that writes it, zh-TW, zh-HK, zh-MO — is given Traditional
+// words under <html lang="zh-Hant">, where the pages fold every Chinese
+// into Simplified. The frame stands inside another site's page, in that
+// page's type: a Traditional page with Simplified labels and glyphs in
+// its replies reads as two hands (Codex on Spark's find, 2026-09-28).
+func webFrameLocale(r *http.Request) *webLocale {
+	for _, tag := range []string{strings.ToLower(strings.TrimSpace(r.URL.Query().Get("lang"))), webBrowserLang(r)} {
+		if l := webLocaleTag(tag); l != nil {
+			if norm, _ := lang.Normal(tag); norm == "zh-Hant" {
+				return webLocales["zh-hant"]
+			}
+			return l
+		}
 	}
 	return webLocales["en"]
 }
@@ -478,6 +506,177 @@ var webStrings = map[string]map[string]string{
 		"err.profile":        "无法读取资料。",
 		"err.nostats":        "这个 hub 没有统计。",
 		"err.stats":          "无法读取统计。",
+	},
+	// Traditional Chinese, which the replies frame alone speaks so far
+	// (webFrameLocale): the hub's own pages still read a Traditional
+	// reader the Simplified column. Written as Taiwan writes it: 貼文,
+	// 登入, 儲存, 位元組.
+	"zh-hant": {
+		"nothing":            "這裡還沒有內容。",
+		"find":               "搜尋貼文",
+		"search":             "搜尋",
+		"notify.off":         "有新貼文時通知我",
+		"notify.on":          "已訂閱新貼文通知",
+		"notify.off.id":      "有人回覆或提到我時通知我",
+		"notify.on.id":       "已訂閱回覆和提及通知",
+		"language":           "語言",
+		"prev":               "上一頁",
+		"next":               "下一頁",
+		"members":            "位成員",
+		"posts":              "則貼文",
+		"online":             "人在線上",
+		"online.title":       "誰在讀這個 hub",
+		"matches":            "{n} 則貼文符合",
+		"nomatch":            "沒有符合的貼文。",
+		"search.hint":        "輸入一兩個詞，然後搜尋。每個詞都必須出現在貼文裡。",
+		"back":               "返回動態",
+		"feed":               "動態",
+		"replies":            "{n} 則回覆",
+		"replies.range":      "第 {a}–{b} 則，共 {n} 則回覆",
+		"replies.none":       "還沒有回覆",
+		"summary":            "摘要",
+		"summary.of":         "前 {n} 則回覆的摘要",
+		"summarize":          "總結",
+		"summary.read":       "前 {n} 則回覆",
+		"reply":              "回覆",
+		"inreply":            "回覆的貼文",
+		"inreply.name":       "回覆 {name}",
+		"since.pre":          "加入於 ",
+		"since.post":         "",
+		"noposts":            "還沒有貼文。",
+		"invited.by":         "由 {name} 邀請",
+		"reply.frame":        "{host} 上的回覆",
+		"noreplies":          "還沒有回覆。",
+		"archived":           "存檔副本",
+		"picture":            "圖片",
+		"sound":              "聲音",
+		"page":               "頁面",
+		"download":           "下載",
+		"replay":             "從頭重播",
+		"close":              "關閉",
+		"zoom":               "縮放",
+		"loading":            "正在載入…",
+		"page.fail":          "無法載入頁面：{err}",
+		"copy":               "複製",
+		"copied":             "已複製",
+		"tr.from":            "譯自{lang}",
+		"tr.show":            "顯示原文",
+		"tr.back":            "顯示譯文",
+		"preview.picture":    "一張圖片。",
+		"preview.pictures":   "{n} 張圖片。",
+		"preview.file":       "一個附件。",
+		"preview.post":       "一則貼文。",
+		"preview.by":         "{what}由 {name} 發佈於 {host}。",
+		"post":               "發文",
+		"compose.note.post":  "用 Solana 錢包發文：每則貼文簽一次名，簽的是訊息，不是交易。",
+		"compose.note.reply": "用 Solana 錢包回覆：每則回覆簽一次名，簽的是訊息，不是交易。",
+		"signin":             "用 Solana 登入",
+		"yourpage":           "你的主頁",
+		"profile":            "個人資料…",
+		"signout":            "登出",
+		"re.clear":           "改為回覆主貼文",
+		"placeholder.post":   "有什麼新鮮事？",
+		"placeholder.reply":  "寫一則回覆",
+		"text.post":          "貼文內容",
+		"text.reply":         "回覆內容",
+		"mention":            "提及",
+		"checking":           "正在檢查這個地址…",
+		"choose.wallet":      "選擇錢包：",
+		"cancel":             "取消",
+		"nowallet":           "這個瀏覽器裡沒有 Solana 錢包。",
+		"declined":           "登入在錢包裡被拒絕了。",
+		"noconnect":          "錢包沒有連線：{err}",
+		"noaccount":          "沒有帳戶",
+		"banned":             "這把金鑰已被禁止在這裡發文。",
+		"below.post":         "這個地址持有的不足 {need}，只能閱讀，不能發文。",
+		"below.reply":        "這個地址持有的不足 {need}，只能閱讀，不能回覆。",
+		"unavailable":        "hub 暫時無法查詢持有量，請稍後再試。",
+		"gone":               "那則回覆已被刪除。清除它，改為回覆主貼文。",
+		"again.post":         "{s} 秒後可以再發文。",
+		"again.reply":        "{s} 秒後可以再回覆。",
+		"each.post":          "每發一則貼文，錢包會請你簽一次名。",
+		"each.reply":         "每則回覆，錢包會請你簽一次名。",
+		"over":               "超出 {max} 位元組的上限 {n} 位元組。",
+		"check.fail":         "無法檢查這個地址：{err}",
+		"http":               "HTTP {code}",
+		"units.raw":          "{n} 個最小單位",
+		"units.tokens":       "{n} 個代幣",
+		"of.mint":            "{units}（mint {mint}）",
+		"or":                 " 或 ",
+		"changed":            "錢包在簽名前改動了訊息，hub 無法驗證。",
+		"youdeclined":        "你在錢包裡拒絕了。",
+		"nosign":             "錢包無法簽名：{err}",
+		"waiting":            "等待你的錢包…",
+		"saving":             "正在儲存…",
+		"sending":            "正在傳送…",
+		"badsig":             "hub 無法驗證錢包的簽名。",
+		"landed":             "這把金鑰的另一則訊息先到了。請再按一次「{btn}」。",
+		"replying.pre":       "回覆 ",
+		"replying.post":      "",
+		"posted":             "已發佈。",
+		"replied":            "已回覆。",
+		"delete":             "刪除",
+		"delete.title":       "刪除這則貼文",
+		"delete.again":       "再按一次刪除，這則貼文就會消失",
+		"deleted":            "已刪除。",
+		"profile.title":      "個人資料",
+		"pic":                "頭像",
+		"choose":             "選擇圖片…",
+		"name":               "名字",
+		"display.name":       "顯示名稱",
+		"holding":            "持有量",
+		"edit":               "編輯",
+		"ok":                 "好",
+		"save":               "儲存",
+		"noname":             "還沒有名字",
+		"nogate":             "這個 hub 沒有代幣門檻。",
+		"unknown":            "未知：hub 暫時無法讀取持有量。",
+		"admin":              "管理員金鑰：不受發文條件限制。",
+		"invited":            "受管理員邀請：不受發文條件限制。",
+		"enough":             "足以發文。hub 要求 {need}。",
+		"less":               "不足 hub 要求的 {need}，這個地址只能閱讀，不能發文。",
+		"pic.max":            "圖片最大 8 MB。",
+		"pic.store":          "hub 暫時無法儲存圖片，請稍後再試。",
+		"pic.type":           "hub 無法讀取這個檔案。請試試 PNG、JPEG 或 GIF。",
+		"uploading":          "正在上傳…",
+		"draw":               "畫圖…",
+		"draw.new":           "新增畫作",
+		"draw.pad":           "畫板",
+		"draw.palette":       "調色盤",
+		"draw.go":            "開始畫",
+		"draw.send":          "傳送",
+		"draw.pencil":        "鉛筆",
+		"draw.eraser":        "橡皮擦",
+		"draw.thin":          "細",
+		"draw.thick":         "粗",
+		"draw.undo":          "還原",
+		"draw.colour":        "顏色 {n}",
+		"draw.full":          "這幅畫已經畫滿了",
+		"draw.discard.q":     "放棄這幅畫？",
+		"draw.discard.why":   "它的筆畫沒有儲存在別處。",
+		"draw.discard":       "放棄",
+		"draw.fail":          "無法傳送這幅畫",
+		"draw.wait.file":     "等待你的錢包為這幅畫簽名（第 1 次，共 2 次）…",
+		"draw.wait.post":     "等待你的錢包為貼文簽名…",
+		"pic.save":           "儲存後使用這張圖片。",
+		"name.req":           "需要一個名字。",
+		"name.max":           "名字最多 {n} 位元組。",
+		"saved":              "個人資料已儲存。",
+		"title.on":           "{name} · {host}",
+		"stats":              "統計",
+		"error.back":         "返回動態。",
+		"err.nopage":         "沒有這個頁面。",
+		"err.feed":           "無法讀取動態。",
+		"err.search":         "無法搜尋貼文。",
+		"err.ambiguous":      "不止一則貼文以此開頭，請使用完整的 id。",
+		"err.nopost":         "沒有這則貼文。",
+		"err.post":           "無法讀取這則貼文。",
+		"err.thread":         "無法讀取這個討論串。",
+		"err.posts":          "無法讀取貼文。",
+		"err.noprofile":      "沒有這個個人資料。",
+		"err.profile":        "無法讀取個人資料。",
+		"err.nostats":        "這個 hub 沒有統計。",
+		"err.stats":          "無法讀取統計。",
 	},
 	"ja": {
 		"nothing":            "まだ何もありません。",

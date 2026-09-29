@@ -118,3 +118,69 @@ func TestWebRepliesFramePaper(t *testing.T) {
 		t.Error("an unknown look changed the frame")
 	}
 }
+
+// TestWebRepliesFrameHant: the frame speaks Traditional Chinese to a
+// reader who asks for it, by ?lang= or by the browser — its words, its
+// <html lang>, and in the paper look its face, Noto Serif TC — while a
+// text in another script keeps that script's face: the Simplified
+// translation such a reader is given is lang="zh-Hans", set in SC, and
+// the page loads both. The hub's own pages fold Traditional into
+// Simplified as before.
+func TestWebRepliesFrameHant(t *testing.T) {
+	s := testServer(t, &config.Config{Gate: config.Gate{Mode: "open"}})
+	site, sitePriv, _ := ed25519.GenerateKey(nil)
+	ann, annPriv, _ := ed25519.GenerateKey(nil)
+	root := ingest(t, s, sitePriv, site, 1, "post.create", map[string]any{"text": "紙的紋理"})
+	en := ingest(t, s, annPriv, ann, 1, "post.create", map[string]any{"text": "Beautiful.", "reply_to": root})
+	ja := ingest(t, s, annPriv, ann, 2, "post.create", map[string]any{"text": "美しい文章です。", "reply_to": root})
+	s.St.SetLang(en, "en", "m", true)
+	s.St.SetLang(ja, "ja", "m", true)
+	if err := s.St.SetTranslation(en, "zh-Hans", "很美。", "m", true); err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+	empty := "/p/" + strings.Repeat("ab", 32) + "/replies"
+	has := func(what, body string, wants ...string) {
+		t.Helper()
+		for _, w := range wants {
+			if !strings.Contains(body, w) {
+				t.Errorf("%s lacks %q", what, w)
+			}
+		}
+	}
+	lacks := func(what, body string, nots ...string) {
+		t.Helper()
+		for _, n := range nots {
+			if strings.Contains(body, n) {
+				t.Errorf("%s carries %q", what, n)
+			}
+		}
+	}
+
+	_, body := get(t, h, empty+"?look=paper&lang=zh-Hant")
+	has("paper, ?lang=zh-Hant", body, `<html lang="zh-Hant" class="framed paper">`, "family=Noto+Serif+TC:wght", "還沒有回覆。",
+		`.paper:lang(zh-Hant) { --serif: "Noto Serif TC"`, `.paper .text:lang(zh-Hans) { font-family: "Noto Serif SC"`)
+	lacks("paper, ?lang=zh-Hant", body, "Noto+Serif+SC", "Noto+Serif+JP", "还没有回复。")
+	for _, al := range []string{"zh-TW,zh;q=0.9,en;q=0.8", "zh-HK", "zh-Hant-TW"} {
+		_, body = get(t, h, empty, "Accept-Language", al)
+		has("the frame for "+al, body, `<html lang="zh-Hant" class="framed">`, "還沒有回覆。")
+	}
+	for _, q := range []string{"?lang=zh", "?lang=zh-CN", "?lang=zh-Hans"} {
+		_, body = get(t, h, empty+q+"&look=paper", "Accept-Language", "zh-TW")
+		has("the frame for "+q, body, `<html lang="zh-Hans" class="framed paper">`, "还没有回复。", "family=Noto+Serif+SC:wght")
+		lacks("the frame for "+q, body, "Noto+Serif+TC")
+	}
+	_, body = get(t, h, empty+"?lang=en", "Accept-Language", "zh-TW")
+	has("?lang=en over a zh-TW browser", body, `<html lang="en" class="framed">`, "No replies yet.")
+
+	// the rows: a translation into Simplified keeps its script's face
+	_, body = get(t, h, "/p/"+root+"/replies?look=paper&lang=zh-Hant")
+	has("a Traditional frame's rows", body, `<div class="text" lang="zh-Hans">很美。</div>`, "譯自英文", "顯示原文",
+		"family=Noto+Serif+SC:wght", "family=Noto+Serif+TC:wght", "family=Noto+Serif+JP:wght", `>回覆</a>`)
+
+	// the hub's own pages are as they were
+	for _, p := range []string{"/", "/p/" + root} {
+		_, body = get(t, h, p, "Accept-Language", "zh-TW")
+		has(p+" for zh-TW", body, `<html lang="zh-Hans">`)
+	}
+}

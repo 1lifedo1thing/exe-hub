@@ -43,7 +43,7 @@ try { const w = JSON.parse(localStorage.getItem("exe-hub-wallet") || "null");
 <meta name="color-scheme" content="light dark">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,100..900;1,100..900&family=Noto+Serif+{{if eq .L.Code "ja"}}JP{{else}}SC{{end}}:wght@200..900&display=swap">{{end}}
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,100..900;1,100..900{{if .Faces.SC}}&family=Noto+Serif+SC:wght@200..900{{end}}{{if .Faces.TC}}&family=Noto+Serif+TC:wght@200..900{{end}}{{if .Faces.JP}}&family=Noto+Serif+JP:wght@200..900{{end}}&display=swap">{{end}}
 <style>
 /* The Platinum chrome — the window with its striped bar, hard shadow and
    close box, the sunken frame, the status strip and the push button —
@@ -766,7 +766,10 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
    is not Platinum — exe-planet's Paper template, one column of Noto Serif
    on grey paper grain: the rows have no ground of their own, so the
    page's paper shows through; Noto Serif, CJK face first as Paper sets
-   it (English text in Noto Serif's own); hairlines in the page's ink
+   it — SC, TC for a Traditional frame, JP for a Japanese one — and a
+   text in another script in that script's face (English in Noto
+   Serif's own, a Simplified translation in a Traditional frame in SC);
+   hairlines in the page's ink
    where Platinum draws black lines and grey fields; light or dark as
    the reader's system is, as Paper is. The colours are Paper's, copied. */
 .paper {
@@ -777,6 +780,7 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
   color-scheme: light dark;
 }
+.paper:lang(zh-Hant) { --serif: "Noto Serif TC", "Noto Serif", "Songti TC", "PMingLiU", serif; }
 .paper:lang(ja) { --serif: "Noto Serif JP", "Noto Serif", "Hiragino Mincho ProN", "Yu Mincho", serif; }
 .paper:lang(en) { --serif: "Noto Serif", "Noto Serif SC", Georgia, serif; }
 @media (prefers-color-scheme: dark) {
@@ -806,6 +810,8 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 .paper .text { margin-top: 4px; }
 .paper .text:lang(en) { font-family: "Noto Serif", var(--serif); }
 .paper .text:lang(ja) { font-family: "Noto Serif JP", var(--serif); }
+.paper .text:lang(zh-Hans) { font-family: "Noto Serif SC", var(--serif); }
+.paper .text:lang(zh-Hant) { font-family: "Noto Serif TC", var(--serif); }
 .paper .text a { text-decoration-thickness: 1px; text-underline-offset: .22em; text-decoration-color: var(--line); }
 .paper .text h1 { font-size: 18px; } .paper .text h2 { font-size: 17px; } .paper .text h3 { font-size: 16px; }
 .paper .text li::before { color: var(--faint); }
