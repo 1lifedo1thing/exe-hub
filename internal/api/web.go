@@ -3,6 +3,7 @@ package api
 import (
 	stats "github.com/livid/exe-stats"
 
+	"bytes"
 	"cmp"
 	_ "embed"
 	"encoding/json"
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"html"
 	"html/template"
+	"image/gif"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -73,6 +75,67 @@ var webIcon512 []byte
 
 //go:embed icon-maskable-512.png
 var webIconMaskable []byte
+
+// The hub's badge (PLAN.md, Public pages — The badge): an 88×31
+// animated GIF, drawn a pixel at a time by badge.py beside it, for other
+// pages to link this hub with, and /badge/, the page that hands it out.
+//
+//go:embed badge.gif
+var webBadgeGIF []byte
+
+// webBadgeFrames and webBadgeSize are what the page's status line says of
+// the GIF, read off the file itself, so a new drawing is never described
+// as the old one.
+var webBadgeFrames, webBadgeSize = func() (int, string) {
+	g, err := gif.DecodeAll(bytes.NewReader(webBadgeGIF))
+	if err != nil {
+		panic("badge.gif: " + err.Error())
+	}
+	return len(g.Image), fmt.Sprintf("%.1f KB", float64(len(webBadgeGIF))/1000)
+}()
+
+// handleBadgeGIF: GET /badge.gif. Other people's pages link this address,
+// so it is kept four hours rather than a day, and a new drawing reaches
+// them the same day.
+func handleBadgeGIF(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/gif")
+	w.Header().Set("Cache-Control", "public, max-age=14400")
+	w.Write(webBadgeGIF)
+}
+
+// webBadge is what the badge page shows besides its words: the two
+// snippets, each set as a post's fenced code block with its Copy button,
+// and the GIF's facts for the status line.
+type webBadge struct {
+	HTML, MD template.HTML
+	Alt      string
+	Frames   int
+	Size     string
+}
+
+// handleBadgePage: GET /badge/, the page that hands out the badge. The
+// snippets link this hub by the address it was asked by, so each hub's
+// page hands out its own; the image's words are in the reader's
+// language, since the snippet goes on the reader's page.
+func (s *Server) handleBadgePage(w http.ResponseWriter, r *http.Request) {
+	rd := webReadingOf(r)
+	base, alt := webBase(r), rd.L.T("badge.alt", "host", r.Host)
+	fence := func(code string) template.HTML {
+		var b strings.Builder
+		writeFence(&b, &card.Fence{Code: code}, false, false, rd.L)
+		return template.HTML(b.String())
+	}
+	d := &webData{Page: "badge", Title: rd.L.T("badge") + " · " + r.Host, Desc: rd.L.T("badge.desc", "host", r.Host),
+		Canonical: true, Lang: rd.Lang, Q: rd.Q,
+		Badge: &webBadge{
+			HTML:   fence(`<a href="` + base + `/"><img src="` + base + `/badge.gif" width="88" height="31" alt="` + alt + `"></a>`),
+			MD:     fence(`[![` + alt + `](` + base + `/badge.gif)](` + base + `/)`),
+			Alt:    alt,
+			Frames: webBadgeFrames,
+			Size:   webBadgeSize,
+		}}
+	s.webRender(w, r, http.StatusOK, d)
+}
 
 func (s *Server) handleFavicon(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/x-icon")
@@ -475,6 +538,7 @@ type webData struct {
 	StatsOn   bool
 	Online    int
 	StatsPage *stats.Page
+	Badge     *webBadge // the badge page's snippets and the GIF's facts
 }
 
 // webURL is the Hub app's URL matcher; it lives in the card package now,

@@ -339,6 +339,13 @@ var webStrings = map[string]map[string]string{
 		"err.profile":   "The profile could not be read.",
 		"err.nostats":   "No stats on this hub.",
 		"err.stats":     "The stats could not be read.",
+		// the badge page (/badge/)
+		"badge":       "Badge",
+		"badge.desc":  "An 88×31 button to link to {host} with, the kind every page of the 1990s web kept in its footer.",
+		"badge.alt":   "{host}, an exe-hub",
+		"badge.own":   "Its own size",
+		"badge.x3":    "Three times",
+		"badge.facts": "GIF, 88 × 31, {n} frames, {size}",
 	},
 	"zh": {
 		"nothing":            "这里还没有内容。",
@@ -506,6 +513,13 @@ var webStrings = map[string]map[string]string{
 		"err.profile":        "无法读取资料。",
 		"err.nostats":        "这个 hub 没有统计。",
 		"err.stats":          "无法读取统计。",
+		// the badge page (/badge/)
+		"badge":       "徽章",
+		"badge.desc":  "一个 88×31 的按钮，用来链接到 {host}，就像九十年代每个网页页脚里的那种。",
+		"badge.alt":   "{host}，一个 exe-hub",
+		"badge.own":   "原始尺寸",
+		"badge.x3":    "放大三倍",
+		"badge.facts": "GIF，88 × 31，{n} 帧，{size}",
 	},
 	// Traditional Chinese, which the replies frame alone speaks so far
 	// (webFrameLocale): the hub's own pages still read a Traditional
@@ -677,6 +691,13 @@ var webStrings = map[string]map[string]string{
 		"err.profile":        "無法讀取個人資料。",
 		"err.nostats":        "這個 hub 沒有統計。",
 		"err.stats":          "無法讀取統計。",
+		// the badge page (/badge/)
+		"badge":       "徽章",
+		"badge.desc":  "一個 88×31 的按鈕，用來連結到 {host}，就像九〇年代每個網頁頁尾裡的那種。",
+		"badge.alt":   "{host}，一個 exe-hub",
+		"badge.own":   "原始尺寸",
+		"badge.x3":    "放大三倍",
+		"badge.facts": "GIF，88 × 31，{n} 幀，{size}",
 	},
 	"ja": {
 		"nothing":            "まだ何もありません。",
@@ -844,5 +865,12 @@ var webStrings = map[string]map[string]string{
 		"err.profile":        "プロフィールを読めませんでした。",
 		"err.nostats":        "この hub に統計はありません。",
 		"err.stats":          "統計を読めませんでした。",
+		// the badge page (/badge/)
+		"badge":       "バッジ",
+		"badge.desc":  "{host} へリンクするための 88×31 のボタン。90 年代のウェブで、どのページのフッターにも並んでいたあれです。",
+		"badge.alt":   "{host}（exe-hub）",
+		"badge.own":   "原寸",
+		"badge.x3":    "3 倍",
+		"badge.facts": "GIF、88 × 31、{n} フレーム、{size}",
 	},
 }

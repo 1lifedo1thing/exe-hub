@@ -1475,6 +1475,33 @@ hub that carries the post.
   in the air; a refetch that fails twice; a playing video through a
   swap on both pages; the 404), and the wallet harness's reply step
   for landing in place.
+ - **The badge (built 2026-09-30).** `/badge/` hands out an 88×31
+  animated GIF, `/badge.gif`, for other pages to link the hub with, as
+  every page of the 1990s web kept a row of such buttons in its footer
+  (Livid asked for one, "90s vibes, a brand new design, surprise me",
+  and for no link to it on the home page). The drawing is a BBS dialled
+  into: a DOS text screen in the sixteen VGA colours that opens on the
+  board's welcome, which is the first frame, so a reader who stops
+  animations sees all of it. That screen is the hub's icon on a tile,
+  "exe-hub" in ANSI bands with a dithered shadow, and PRESS ANY KEY,
+  which on a hub is the plain truth, since a key is the account. Then a
+  post comes in along a spoke of the icon and rolls the word's colours;
+  the line drops (NO CARRIER), the modem dials the hub's port (ATDT
+  7788), connects at 28800, and the screen comes down the wire a
+  character cell at a time. `internal/api/badge.py` draws it pixel by
+  pixel and rewrites `badge.gif`, which the binary embeds. The GIF is
+  kept four hours rather than a day, so a new drawing reaches the pages
+  that link it the same day. The page is the hub's window with the
+  Feed button and the language menu on its top strip, the badge at its
+  own size and at three times (both `image-rendering: pixelated`), a
+  paragraph in the page's language, and the HTML and the Markdown, each
+  in a post's code block with its Copy button. The snippets name the hub
+  by the address the page was asked by, so each hub hands out its own,
+  and the image's alt text is in the reader's language, since it goes
+  on the reader's page. `/badge` redirects there with the query kept; the
+  stats count it as "The badge". Checked by `badge_test.go` and, in a
+  browser, at DPR 1, 1.5 and 2, in three languages and on phones down to
+  320px.
 
 ## Notifications — Web Push, by what concerns the reader (built)
 

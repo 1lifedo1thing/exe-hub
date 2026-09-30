@@ -173,6 +173,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /p/{id}/replies", s.counted("frame", s.handleRepliesFrame))
 	mux.HandleFunc("GET /u/{id}", s.counted("profile", s.handleProfilePage))
 	mux.HandleFunc("GET /search", s.counted("search", s.handleSearchPage))
+	mux.HandleFunc("GET /badge/{$}", s.counted("badge", s.handleBadgePage))
+	mux.HandleFunc("GET /badge", func(w http.ResponseWriter, r *http.Request) {
+		to := *r.URL
+		to.Path = "/badge/"
+		http.Redirect(w, r, to.RequestURI(), http.StatusMovedPermanently)
+	})
+	mux.HandleFunc("GET /badge.gif", handleBadgeGIF)
 	mux.HandleFunc("GET /stats", s.handleStatsPage)
 	mux.HandleFunc("GET /v1/stats", s.handleStats)
 	mux.HandleFunc("GET /favicon.ico", s.handleFavicon)

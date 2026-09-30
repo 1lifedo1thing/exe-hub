@@ -751,6 +751,16 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 .profile h1 { margin: 0; font-size: 14px; }
 .profile p { margin: 4px 0 0; overflow-wrap: anywhere; }
 .alert { padding: 16px 14px; }
+/* the badge page (PLAN.md, Public pages — The badge): the badge at its
+   own size and at three times, on the desktop's lavender in a sunken
+   field of its own. An 88×31 button is pixel art, so both are scaled a
+   pixel at a time. */
+.badges { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: center; gap: 12px 32px;
+  margin: 12px 0; padding: 20px 12px 10px; border: 1px solid #262626; background: #ccf;
+  box-shadow: -1px -1px 0 #999, 1px 1px 0 #fff; }
+.badges figure { margin: 0; }
+.badges img { display: block; max-width: 100%; height: auto; margin: 0 auto 6px; image-rendering: pixelated; }
+.badges figcaption { text-align: center; font-size: 11px; color: #333; }
 /* The replies frame (PLAN.md, Replies under a blog post): the rows
    alone, on white, for another page's window to hold. That window draws
    the sunken frame, so this one draws no border and no margin, and the
@@ -977,6 +987,38 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 </div>
 {{else if eq .Page "stats"}}
 {{template "stats" .StatsPage}}
+{{else if eq .Page "badge"}}
+<div class="window">
+  <div class="titlebar"><a class="tbox" href="/{{.Q}}" title="{{T "back"}}" aria-label="{{T "back"}}"></a><span class="stripe"></span><span class="title">{{T "badge"}}</span><span class="stripe"></span></div>
+  <div class="frame">
+    <div class="pager top"><a class="btn prev back" href="/{{.Q}}">{{template "arrow"}}<span>{{T "feed"}}</span></a>{{template "lang" .}}</div>
+    <div class="pad text">
+{{if eq .L.Code "zh"}}
+      <p>在链接预览出现之前，网页用的是按钮：88×31 像素，一排排放在页面底部，每一个都链接到作者常去、在用或喜欢的地方。这是 {{.Host}} 的按钮：它像九十年代的 BBS 那样拨号接入这个 hub，点一下就把读者带到这里。</p>
+{{else if eq .L.Code "ja"}}
+      <p>リンクプレビューが生まれる前、ウェブにはボタンがありました。88×31 ピクセルでページの下に並び、一つひとつが作者のよく行く場所、使っているもの、好きなものへのリンクでした。これは {{.Host}} のボタンです。90 年代の BBS のようにこの hub へダイヤルし、クリックすると読者をここへ連れてきます。</p>
+{{else}}
+      <p>Before there were link previews there were buttons: 88 by 31 pixels, a row of them at the foot of a page, each one a link to somewhere its author read, ran or liked. This is {{.Host}}'s. It dials in to the hub like a 1990s bulletin board, and a click brings a reader here.</p>
+{{end}}
+      <div class="badges">
+        <figure><img src="/badge.gif" width="88" height="31" alt="{{.Badge.Alt}}"><figcaption>{{T "badge.own"}}</figcaption></figure>
+        <figure><img src="/badge.gif" width="264" height="93" alt=""><figcaption>{{T "badge.x3"}}</figcaption></figure>
+      </div>
+{{if eq .L.Code "zh"}}
+      <p>把它放进你的页脚、侧栏或 README。直接粘贴下面任意一段，或者<a href="/badge.gif" download="exe-hub-badge.gif">保存这个 GIF</a>，放到你自己的服务器上。</p>
+{{else if eq .L.Code "ja"}}
+      <p>フッターやサイドバー、README に置いてください。下のどちらかをそのまま貼り付けるか、<a href="/badge.gif" download="exe-hub-badge.gif">GIF を保存</a>してご自身のサーバーから配信してください。</p>
+{{else}}
+      <p>Put it in your footer, your sidebar or a README. Paste one of these as it is, or <a href="/badge.gif" download="exe-hub-badge.gif">save the GIF</a> and serve it yourself.</p>
+{{end}}
+      <h2>HTML</h2>
+      {{.Badge.HTML}}
+      <h2>Markdown</h2>
+      {{.Badge.MD}}
+    </div>
+    <div class="statusbar"><span>{{T "badge.facts" "n" .Badge.Frames "size" .Badge.Size}}</span></div>
+  </div>
+</div>
 {{else}}
 <div class="window">
   <div class="titlebar"><a class="tbox" href="/{{.Q}}" title="{{T "back"}}" aria-label="{{T "back"}}"></a><span class="stripe"></span><span class="title">{{.Host}}</span><span class="stripe"></span></div>
