@@ -65,10 +65,9 @@ around.
   what `-state` defaults to when it is not given, so the side commands
   need no flag in an exec), and rebuilds with `up -d --build`. Not a registry image:
   the build is from source, per architecture, on the machine that runs
-  it, until there is somewhere to publish one from. Known catch at the
-  time of writing: `go.mod` takes `github.com/livid/exe-stats` by a
-  `replace` to `/www/exe-stats`, so a clone elsewhere builds once that
-  module is published and the replace gone.
+  it, until there is somewhere to publish one from. `go.mod` takes
+  `github.com/livid/exe-stats` at a published tag, so a clone builds
+  anywhere.
 
 ## Aggregation — one-hop pull replication (built)
 
@@ -2142,9 +2141,11 @@ the page works without JavaScript (a small script keeps it current).
   link and counts nothing; read at start like `media`. Page views are
   kept forever unless `retention_days` is set, when a daily sweep
   drops the older ones (Livid's call, 2026-09-16: a row is a few dozen
-  bytes and the history is the point). The table (`hits`, plus `hits_salt`)
-  is the hub's own record like `pins` and `cards`: not derived from the
-  log, left alone by `Rebuild`, not replicated.
+  bytes and the history is the point). The tables (`hits` and
+  `hits_salt`, plus the finished days exe-stats has counted in
+  `hits_views`, `hits_days` and `hits_meta`) are the hub's own record
+  like `pins` and `cards`: not derived from the log, left alone by
+  `Rebuild`, not replicated.
 - **Behind exe's proxy** the hub sees Cloudflare's headers as cloudflared
   sent them (the reverse proxy copies them through; its own
   `X-Forwarded-For` names cloudflared, which is why `CF-Connecting-IP`

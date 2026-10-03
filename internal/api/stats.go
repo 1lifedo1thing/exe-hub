@@ -2,7 +2,7 @@ package api
 
 // The pages' own analytics: the counting, the report and the desk at
 // /stats all live in github.com/livid/exe-stats, which any Go server can
-// use. The hub keeps its two tables in hub.db beside its posts and hands
+// use. The hub keeps its tables in hub.db beside its posts and hands
 // the package the three things only the hub knows: where a day begins,
 // what its paths are called, and which handlers serve pages. The rest of
 // this file is that wiring; PLAN.md's Stats section is the behaviour.
