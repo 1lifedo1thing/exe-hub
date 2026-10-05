@@ -3080,6 +3080,32 @@ file, which is why the pages took no pictures and Draw… asked twice.
   hub knows a message by its id and answers `duplicate` before the
   cooldown is looked at, so the post is found whatever became of its
   draft, and there is one post.
+- **An answer that never comes leaves the post parked** (Codex's third
+  case, the longer outage; Livid's "Improve", 2026-10-05). When the
+  three tries run out the page keeps what it sent (`parked`: the signed
+  request, its message id, the key and the body it was signed for), the
+  words and the pictures stay, and the status line says "The hub didn't
+  answer. Send it again: nothing will be posted twice." Until then a
+  second press fetched the next seq and signed a second post, which the
+  hub took once the cooldown allowed. The next press settles it by what
+  the hub answers:
+  - **Nothing was changed:** the same request goes again, with no new
+    seq and no prompt. `accepted` means it had not landed and now has;
+    `duplicate` means it had; either way the window clears and the page
+    shows the post. A 409 means another message took its seq while the
+    answer was missing, so it never landed (the id is looked up before
+    the seq), and only then is the wallet asked again, in that press.
+  - **The words, the pictures or the target were changed:** the parked
+    request is no longer the post in the window, and sending it would
+    post what the writer has since rewritten. The page asks `GET
+    /v1/post/{id}` first. Found: nothing is signed or sent, the page
+    brings the earlier post in and says "Your earlier version was
+    posted. Send again to post this one too." Not found: it never
+    landed, and the press goes on to sign the post as it stands.
+  - A cooldown's 429 or a fault of the hub's own (5xx) leaves it parked;
+    any other answer settles it. Only `post.create` is parked: a profile
+    saved twice or a post deleted twice is the same thing once. It
+    lives in the page, so a reload forgets it, as it forgets the words.
 - **On the page.** **Picture…** stands left of Draw… (a paperclip glyph
   on a phone) and opens the file picker for up to four pictures; a
   picture pasted into the words or dropped on the window is attached

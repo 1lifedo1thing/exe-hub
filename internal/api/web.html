@@ -2051,36 +2051,56 @@ document.addEventListener("change", e => {
       throw new Error(e.message === "changed" ? T("changed") : declined(e) ? T("youdeclined") : T("nosign", { err: e.message || e }));
     }
   }
+  // A post the wallet signed and the hub has not answered for (PLAN.md,
+  // Draft uploads — an answer that never comes): what was sent, its
+  // message id, whose it is and the body it was signed for. It is kept
+  // past sendOp's own tries, so the next press sends it again instead of
+  // signing a second post. Only a post is parked: a profile saved twice or
+  // a post deleted twice is the same thing once.
+  let parked = null; // {author, key, id, sent}
   async function sendOp(type, body, say = tell, restage = null) {
     const author = b64(me.pub);
-    const s = await getJSON("/v1/seq?author=" + encodeURIComponent(author));
-    if (!s.r.ok) throw new Error(s.out.error || T("http", { code: s.r.status }));
-    const env = enc.encode(JSON.stringify({ type, author, seq: s.out.seq + 1, ts: Date.now(), body }));
-    const msg = new Uint8Array(PREFIX.length + env.length);
-    msg.set(enc.encode(PREFIX));
-    msg.set(env, PREFIX.length);
-    say(T("waiting"));
-    const sig = await signed(msg);
+    const isPost = type === "post.create", key = isPost ? JSON.stringify(body) : "";
+    // a held post that stands as it was signed goes again as it is: no new seq, no prompt
+    const resend = isPost && !!parked && parked.author === author && parked.key === key;
+    let sent;
+    if (resend) sent = parked.sent;
+    else {
+      const s = await getJSON("/v1/seq?author=" + encodeURIComponent(author));
+      if (!s.r.ok) throw new Error(s.out.error || T("http", { code: s.r.status }));
+      const env = enc.encode(JSON.stringify({ type, author, seq: s.out.seq + 1, ts: Date.now(), body }));
+      const msg = new Uint8Array(PREFIX.length + env.length);
+      msg.set(enc.encode(PREFIX));
+      msg.set(env, PREFIX.length);
+      say(T("waiting"));
+      const sig = await signed(msg);
+      sent = JSON.stringify({ envelope: b64(env), sig: b64(sig) });
+      if (isPost) parked = { author, key, id: await sha256hex(env), sent };
+    }
     say(T(type === "profile.set" ? "saving" : "sending"));
     // What was signed is sent until the hub answers. The hub knows a
     // message by its id, so the same envelope again makes no second post:
     // one whose answer was lost comes back "duplicate", with its id. A hub
     // that no longer holds a picture the post names (the draft lapsed
     // while the wallet was open) is sent the bytes again by restage, then
-    // this same envelope. Neither asks the wallet a second time.
-    const sent = JSON.stringify({ envelope: b64(env), sig: b64(sig) });
+    // this same envelope. Neither asks the wallet a second time. When the
+    // tries run out a post stays held, and the writer is told to send it
+    // again.
     let r, out;
     for (let tries = 0, again = !!restage; ; tries++) {
       const wait = () => new Promise(res => setTimeout(res, 1000 * (tries + 1)));
       try {
         ({ r, out } = await getJSON("/v1/msg", { method: "POST", headers: { "Content-Type": "application/json" }, body: sent }));
       } catch (e) {
-        if (tries >= 2) throw e;
-        await wait();
-        continue;
+        if (tries < 2) { await wait(); continue; }
+        if (isPost) throw new Error(T("lost"));
+        throw e;
       }
       // a gateway's own answer, not the hub's: the hub may or may not have heard
-      if (r.status >= 502 && !out.error && tries < 2) { await wait(); continue; }
+      if (r.status >= 502 && !out.error) {
+        if (tries < 2) { await wait(); continue; }
+        if (isPost) throw new Error(T("lost"));
+      }
       if (r.status === 400 && out.code === "no_pin" && again) {
         again = false;
         say(T("uploading"));
@@ -2090,6 +2110,10 @@ document.addEventListener("change", e => {
       }
       break;
     }
+    // The hub answered. Unless it only asked for time (a cooldown, or a
+    // fault of its own), the held post is settled: taken, found, or
+    // refused for good.
+    if (isPost && r.status !== 429 && r.status < 500) parked = null;
     if (r.ok) return out.id;
     if (r.status === 429) {
       until = Date.now() + (parseInt(r.headers.get("Retry-After"), 10) || verdict.cooldown || 60) * 1000;
@@ -2097,7 +2121,13 @@ document.addEventListener("change", e => {
     }
     if (r.status === 403) { await check(); if (verdict && verdict.gate === "below") throw new Error(""); }
     if (r.status === 401) throw new Error(T("badsig"));
-    if (r.status === 409) throw new Error(T("landed", { btn: send.textContent }));
+    if (r.status === 409) {
+      // The hub looks a message up by its id before its seq, so a held
+      // post it calls stale never landed: another message took its seq
+      // while the answer was missing. Only now is the wallet asked again.
+      if (resend) return sendOp(type, body, say, restage);
+      throw new Error(T("landed", { btn: send.textContent }));
+    }
     throw new Error(out.error || T("http", { code: r.status }));
   }
 
@@ -2401,6 +2431,24 @@ document.addEventListener("change", e => {
     if (t) body.text = t;
     if (embeds) body.embeds = embeds;
     if (to) body.reply_to = to;
+    // A post went unanswered and this is not that post: the words, the
+    // pictures or the target changed since. Before anything is signed the
+    // hub is asked whether the earlier one landed. If it did, the writer
+    // is told and nothing is sent: this press was not for a second post.
+    if (parked && (parked.author !== b64(me.pub) || parked.key !== JSON.stringify(body))) {
+      if (parked.author === b64(me.pub)) {
+        let was;
+        try { was = (await getJSON("/v1/post/" + parked.id)).r; } catch (e) { throw new Error(T("lost")); }
+        if (was.ok) {
+          const id = parked.id;
+          parked = null;
+          if (window.hubRefresh) window.hubRefresh(replyTo ? id : "");
+          throw new Error(T("earlier"));
+        }
+        if (was.status !== 404) throw new Error(T("http", { code: was.status }));
+      }
+      parked = null; // it never landed, or it is another key's
+    }
     const id = await sendOp("post.create", body, say, restage);
     text.value = "";
     picked.clear();

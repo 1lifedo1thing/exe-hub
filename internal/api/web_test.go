@@ -952,7 +952,10 @@ func TestWebAttach(t *testing.T) {
 			t.Errorf("%s: %s is not left of %s", path, words[0], words[1])
 		}
 		for _, has := range []string{`<div class="atts"></div><input type="file" class="att-file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>`,
-			`<template class="att-tpl"><div class="row att-row">`, `getJSON("/v1/draft"`, `out.code === "no_pin" && again`, `"att.busy"`} {
+			`<template class="att-tpl"><div class="row att-row">`, `getJSON("/v1/draft"`, `out.code === "no_pin" && again`, `"att.busy"`,
+			// a post left unanswered is held: sent again as it was, asked after when it was changed
+			`let parked = null;`, `if (resend) sent = parked.sent;`, `if (resend) return sendOp(type, body, say, restage);`,
+			`was = (await getJSON("/v1/post/" + parked.id)).r;`, `"lost"`, `"earlier"`} {
 			if !strings.Contains(body, has) {
 				t.Errorf("%s: the page lacks %s", path, has)
 			}
