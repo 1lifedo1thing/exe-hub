@@ -935,9 +935,41 @@ func TestWebDrawing(t *testing.T) {
 	}
 }
 
+// TestWebAttach (PLAN.md, Draft uploads): the Post and Reply windows
+// carry Picture… left of Draw…, in the page's language, with the place
+// its rows take and the script that stages a picture unsigned and sends
+// a lapsed one again. The page signs no file of a post: /v1/upload is
+// not in it.
+func TestWebAttach(t *testing.T) {
+	s := testServer(t, &config.Config{Gate: config.Gate{Mode: "open"}})
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	id := ingest(t, s, priv, pub, 1, "post.create", map[string]any{"text": "hello"})
+	for path, words := range map[string][2]string{"/": {"Picture…", "Draw…"}, "/p/" + id: {"Picture…", "Draw…"}, "/?lang=zh": {"图片…", "画图…"}, "/?lang=ja": {"画像…", "描く…"}} {
+		_, body := get(t, s.Handler(), path)
+		want := `<button type="button" class="btn att-btn" aria-label="` + words[0] + `" disabled><svg class="gl"`
+		end := `<span>` + words[0] + `</span></button><button type="button" class="btn draw-btn" aria-label="` + words[1] + `"`
+		if !strings.Contains(body, want) || !strings.Contains(body, end) {
+			t.Errorf("%s: %s is not left of %s", path, words[0], words[1])
+		}
+		for _, has := range []string{`<div class="atts"></div><input type="file" class="att-file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>`,
+			`<template class="att-tpl"><div class="row att-row">`, `getJSON("/v1/draft"`, `out.code === "no_pin" && again`, `"att.busy"`} {
+			if !strings.Contains(body, has) {
+				t.Errorf("%s: the page lacks %s", path, has)
+			}
+		}
+		if strings.Contains(body, `"/v1/upload"`) {
+			t.Errorf("%s: the page still signs a file to /v1/upload", path)
+		}
+	}
+	if _, body := get(t, s.Handler(), "/search?q=hello"); strings.Contains(body, `class="btn att-btn"`) {
+		t.Error("the search page carries Picture…")
+	}
+}
+
 // TestWebDrawPad: the Post and Reply windows carry Draw… left of their
 // button, waiting for a wallet, in the page's language, and the page
-// ships the pad with the app's engine and both signatures' paths.
+// ships the pad with the app's engine and its one signature's path: the
+// drawing staged as a draft, then the post.
 func TestWebDrawPad(t *testing.T) {
 	s := testServer(t, &config.Config{Gate: config.Gate{Mode: "open"}})
 	pub, priv, _ := ed25519.GenerateKey(nil)
@@ -949,7 +981,7 @@ func TestWebDrawPad(t *testing.T) {
 		if !strings.Contains(body, want) || !strings.Contains(body, end) {
 			t.Errorf("%s: Draw… is not left of %s", path, words[1])
 		}
-		for _, js := range []string{`const DRAW_KEY = "exe-sketch";`, `async function drawingFile(rec)`, `getJSON("/v1/upload"`, `async function post(embeds, say)`, `"draw.wait.file"`} {
+		for _, js := range []string{`const DRAW_KEY = "exe-sketch";`, `async function drawingFile(rec)`, `d.cid = (await stage(d.body)).cid;`, `async function post(embeds, say, restage)`, `"draw.wait.post"`} {
 			if !strings.Contains(body, js) {
 				t.Errorf("%s: the page lacks %s", path, js)
 			}

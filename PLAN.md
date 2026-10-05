@@ -375,7 +375,9 @@ launch mint is `9raU…pump` (6 decimals); the initial threshold is
   fields: body decoding is not strict.
 - **Hub-mediated upload only in v1:** client POSTs bytes → hub enforces
   size, sniffs the real MIME (doesn't trust the declaration), adds + pins
-  via kubo RPC (`/api/v0/add`), returns the CID. No arbitrary external
+  via kubo RPC (`/api/v0/add`), returns the CID. A picture may instead go
+  up unsigned as a draft, which is added and pinned only when a signed
+  post names it (Draft uploads). No arbitrary external
   CIDs in v1 (fetching untrusted CIDs hangs and size-bombs; if ever
   allowed, hard timeout + size-capped reader before pinning). A picture a
   post links on IPFS is fetched over HTTPS from the gateway the link
@@ -406,12 +408,21 @@ launch mint is `9raU…pump` (6 decimals); the initial threshold is
 
 ## HTTP API
 
-- `POST /v1/msg` — all mutations (signed envelope).
+- `POST /v1/msg` — all mutations (signed envelope). A message the hub
+  already holds is answered `{"id", "status": "duplicate"}` as soon as its
+  signature has been checked, before any policy (2026-10-05): a client
+  whose answer was lost sends the same envelope again and hears of its
+  post, not of the cooldown that post started. An embed CID the hub holds
+  no file for is refused 400 with `"code": "no_pin"` beside the error, so
+  a page can tell a lapsed draft from any other refusal.
 - `POST /v1/upload` — embed bytes → CID. **Uploads are signed too**: the
   author signs `"exe-hub:v1\nupload\n" + ts + "\n" + hex sha256(body)`
   (headers `X-Hub-Author`/`X-Hub-Ts`/`X-Hub-Sig`, ±10 min skew), and the
   same gate/ban policy as posting applies — otherwise anyone could use the
   hub as free pinned storage.
+- `POST /v1/draft` — a picture's bytes → the CID they would have, with
+  no signature: the hub only holds them, ten minutes, until a signed
+  post names the CID (see Draft uploads).
 - `POST /v1/avatar` — profile image minting: same signed authorization and
   gate/ban policy as `/v1/upload`, but the hub normalizes the image before
   pinning — largest centered square crop, CatmullRom scale to 128×128,
@@ -1139,8 +1150,9 @@ hub that carries the post.
   clears it: a draft is never sent to another post than the one it was
   written to by itself (Codex's point in the thread), and clearing keeps
   the draft. Text and names are
-  checked in bytes against the envelope caps before a popup. Not built:
-  attachments in posts (each would be another signature, the upload's) and a
+  checked in bytes against the envelope caps before a popup. Pictures
+  in posts are built (2026-10-05, Draft uploads: the picture goes up
+  unsigned and the post's signature is the only one). Not built: a
   session key that would sign without popups (a protocol change every
   hub would have to accept). The page windows that show admin HTML run
   in opaque-origin frames and cannot reach the page's wallet code; a
@@ -2981,19 +2993,18 @@ change to both).
   pixel is the largest whole number of device pixels that leaves the
   panel inside the viewport. Cancel and Escape ask before a drawing is
   discarded.
-- **Send is two signatures**, and the panel says which the wallet is
-  asking for. The first authorizes the file (`POST /v1/upload`, the
-  upload text a profile picture signs: the time and the file's SHA-256);
-  the second is the post's, by the window's own path (`post`), so the
-  words, the mentions and the reply target go with the drawing. The
-  embed is `{cid, mime: "image/png", filename: "drawing.png", width,
-  height}`, the pad's size.
+- **Send is one signature** (2026-10-05; it was two, the file's and
+  then the post's). The file goes up as a draft (`POST /v1/draft`, Draft
+  uploads) and the wallet is asked for the post alone, by the window's
+  own path (`post`), so the words, the mentions and the reply target go
+  with the drawing. The embed is `{cid, mime: "image/png", filename:
+  "drawing.png", width, height}`, the pad's size.
 - **A drawing needs no words.** The hub takes a post with an embed and
   no text; Post itself still wants words, having nothing else to send.
 - **A post declined or refused keeps everything**: the panel, the
   drawing, the words, the reply target and the file the hub already
   holds. Send again asks for the post alone. A stroke or an Undo after
-  that makes it another drawing, and its file is signed for again
+  that makes it another drawing, and its file goes up again
   (Codex's case, 2026-09-27).
 - **What would stop the post is said before the wallet is asked**: a
   cooldown still running, words past the limit, a reply that is gone.
@@ -3015,3 +3026,74 @@ change to both).
   1.25x, 1.5x and 2x, a finger's flicks on a phone. The wallet harness
   (`exe-hub-wallet/wallet-e2e.js`) still passes over the shared path.
   Not tried: a real wallet extension, a real phone.
+
+## Draft uploads — a picture signed for with its post (built 2026-10-05)
+
+A reader with a wallet attaches pictures in the Post and Reply windows
+and signs once, for the post and its pictures together. Livid's to-do
+of 2026-09-24 ("Better flow to sign attachments in exe-hub public page
+post box"), built on his word 2026-10-05; Codex's two cases in that
+thread are the retries below. A signed upload costs a wallet prompt a
+file, which is why the pages took no pictures and Draw… asked twice.
+
+- **A draft is bytes the hub only holds.** `POST /v1/draft` takes a
+  picture with no key and no signature: the body capped like any embed
+  (8 MB), sniffed, and refused unless it is a PNG, a JPEG, a GIF or a
+  WebP (415: an SVG or an HTML page is no draft; anything else still
+  goes signed to `/v1/upload`). The hub asks kubo what CID the bytes
+  would get, `add?only-hash=true&cid-version=1`, which writes no block
+  and no pin, keeps the bytes in memory under that CID for ten minutes
+  and answers `{cid, mime, size, expires}`. A draft is in no table, in
+  no IPFS repo and behind no address: `/v1/embed` serves pins, and a
+  draft is not one. A restart forgets every draft. A file the hub
+  already keeps is answered without `expires` and not held again.
+- **The post that names it is what keeps it.** `POST /v1/msg` with a
+  `post.create`, once its signature and the policy have passed (ban,
+  cooldown, gate) and its seq is not stale, adds and pins each embed
+  that is still a draft (`promoteDrafts`: kubo's `add`, the pin row a
+  signed upload gets) and then ingests as ever, the store finding the
+  pin where it looks for any embed. So nothing unsigned reaches IPFS or
+  a reader, and the envelope, the store and the peers are untouched: to
+  a peer the post is a post with embeds. A post the store then refuses
+  leaves a staged pin, swept after a day like an unused signed upload.
+- **Same settings, same CID, and checked.** `ipfs.Hash` and `ipfs.Add`
+  send kubo the same import flags (`cid-version=1` and nothing else),
+  so the CID promised is the CID kept; verified on kubo 0.43 with
+  pinned pictures and with a 600 KB one that spans chunks. If kubo ever
+  answers the add with another CID, the file is unpinned and the post
+  refused (502): what was signed names a file the hub does not hold.
+- **A budget instead of a key.** Per client address (Cloudflare's
+  `CF-Connecting-IP`, else the connection): 8 live drafts, 32 MB of
+  them, 24 requests a minute; and 128 MB of drafts in all. Past any of
+  them the answer is 429 with `Retry-After`. The same file sent again
+  starts its ten minutes over and counts once.
+- **The lapse costs no second signature** (Codex's first case). The
+  page keeps the bytes. A draft older than five minutes is sent again
+  before the wallet is asked; one that lapses while the wallet is open
+  is refused by name (`"code": "no_pin"`), and the page sends the bytes
+  again and then the same signed envelope. What cannot be saved is a
+  stale seq: another message from the key landed meanwhile, the hub
+  answers 409, and the page says to press Post again.
+- **Nor does a lost answer** (his second). The page sends the signed
+  envelope until the hub answers, three times at the most, a second
+  apart then two: a network failure, or a gateway's own 502 to 504. The
+  hub knows a message by its id and answers `duplicate` before the
+  cooldown is looked at, so the post is found whatever became of its
+  draft, and there is one post.
+- **On the page.** **Picture…** stands left of Draw… (a paperclip glyph
+  on a phone) and opens the file picker for up to four pictures; a
+  picture pasted into the words or dropped on the window is attached
+  too. Each is a row under the words, the reply row's shape: a 20px
+  thumbnail, the name, the size ("Preparing…" until the hub has
+  answered its CID) and the reply row's cross to take it off. Post is
+  on with words or a picture, off while one is still on its way. The
+  same picture twice is one picture. The embed is `{cid, mime,
+  filename}`, the mime the hub sniffed.
+- **A phone's status line has its own line.** With three buttons beside
+  it, the status line had room for half its words and stood two lines
+  high. At 480px and under it takes the row's whole width and the
+  buttons stand under it, at the right.
+- **Not built:** the profile picture still signs its own upload
+  (`/v1/avatar` mints the only CID `profile.set` takes); video and
+  sound from the pages (they go through `/v1/media`, signed); the exe
+  Hub app, which signs with the node's key and needs none of this.

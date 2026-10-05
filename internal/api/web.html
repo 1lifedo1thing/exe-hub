@@ -382,19 +382,31 @@ a.mention { text-decoration: none; }
 .compose .wbtn img { width: 14px; height: 14px; display: block; }
 @media (pointer: coarse) { .compose textarea, .compose input[type=text] { font-size: 16px; } .compose input[type=text] { height: 24px; } }
 /* Draw… (PLAN.md, Drawings): the Hub app's pad, on the page. The button
-   stands left of Post and wears its word; on a phone its glyph alone,
-   which leaves the status line its room. */
-.compose .draw-btn .gl { display: none; width: 13px; height: 13px; shape-rendering: crispEdges; }
-.compose .draw-btn .gl .k { fill: currentColor; }
+   stands left of Post and wears its word; on a phone its glyph alone. */
+.compose :is(.draw-btn, .att-btn) .gl { display: none; width: 13px; height: 13px; shape-rendering: crispEdges; }
+.compose :is(.draw-btn, .att-btn) .gl .k { fill: currentColor; }
 .compose .draw-btn .gl .w { fill: #fff; }
 .compose .draw-btn:disabled .gl .w { fill: #ddd; }
-@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) { .compose .draw-btn .gl { shape-rendering: geometricPrecision; } }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) { .compose :is(.draw-btn, .att-btn) .gl { shape-rendering: geometricPrecision; } }
 @media (max-width: 480px) {
-  .compose .row:has(.draw-btn) { gap: 8px; } /* three things on a phone's row: the status line keeps its one line */
-  .compose .draw-btn { min-width: 0; padding: 2px 8px; display: inline-flex; align-items: center; }
-  .compose .draw-btn span { display: none; }
-  .compose .draw-btn .gl { display: block; }
+  /* a phone: the status line has a line of its own, whole, and the three
+     buttons the row under it, at its right end (beside them it had room
+     for half its words) */
+  .compose .row:has(.draw-btn) { gap: 8px; justify-content: flex-end; }
+  .compose .row:has(.draw-btn) .status { flex: 0 0 100%; }
+  .compose :is(.draw-btn, .att-btn) { min-width: 0; padding: 2px 8px; display: inline-flex; align-items: center; }
+  .compose :is(.draw-btn, .att-btn) span { display: none; }
+  .compose :is(.draw-btn, .att-btn) .gl { display: block; }
 }
+/* Picture… (PLAN.md, Draft uploads): left of Draw…, its word on a desk
+   and its glyph on a phone. A picture attached is a row under the words,
+   the reply row's shape: its thumbnail in the avatar's box, its name and
+   size, and the reply row's cross to take it off. */
+.compose .att-row { flex-wrap: nowrap; gap: 8px; margin: 0 0 8px; }
+.compose .att-th { flex: none; box-sizing: border-box; width: 20px; height: 20px; border: 1px solid #262626; background: #ccc; }
+.compose .att-th img { display: block; width: 18px; height: 18px; object-fit: cover; }
+.compose .att-q { flex: 1 1 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compose .att-q b { font-size: 12px; color: #262626; }
 /* The panel, on a veil of its own (dveil, its dialogs ddlg: the
    Profile dialog's veil and dialog stay the only .veil and .dlg in the
    window, for whatever selects them). It opens on the two choices a
@@ -1772,6 +1784,7 @@ document.addEventListener("change", e => {
   const pEdit = q(".p-edit"), pOk = q(".p-ok"), pCancel = q(".p-cancel"), pSave = q(".p-save");
   const pAva = q(".p-ava img"), pChoose = q(".p-choose"), pFile = q(".p-file");
   const drawBtn = q(".draw-btn");
+  const attBtn = q(".att-btn"), attFile = q(".att-file"), attsBox = q(".atts"), attTpl = q(".att-tpl");
   const noteText = note.textContent;
   const enc = new TextEncoder();
   const bytes = s => enc.encode(s).length;
@@ -1880,6 +1893,8 @@ document.addEventListener("change", e => {
   // ---- state ----
   let me = null, verdict = null, until = 0, busy = false, flash = "", timer = 0;
   let target = null; // on a thread page: the reply this window answers instead of the page's post
+  const ATT_MAX = 4; // the hub's embeds to a post
+  let atts = []; // the pictures attached: {name, mime, size, body, url, cid, at} (Draft uploads, below)
   const watched = new WeakSet();
 
   function need(v) {
@@ -1904,9 +1919,11 @@ document.addEventListener("change", e => {
     const can = !!v && !v.banned && v.gate !== "below" && v.gate !== "unavailable";
     const t = text.value.trim();
     const over = bytes(t) - MAX_TEXT;
-    send.disabled = busy || !can || left > 0 || !t || over > 0 || !!(target && target.gone);
+    // words or a picture make a post; a picture still on its way holds it
+    send.disabled = busy || !can || left > 0 || (!t && !atts.length) || over > 0 || !!(target && target.gone) || atts.some(a => !a.cid);
     profileBtn.disabled = busy;
     drawBtn.disabled = busy || !can;
+    attBtn.disabled = busy || !can || atts.length >= ATT_MAX;
     status.textContent = over > 0 ? T("over", { n: over, max: MAX_TEXT }) : flash || line(left);
     if (left > 0 && !flash) timer = setTimeout(render, 1000);
   }
@@ -2034,7 +2051,7 @@ document.addEventListener("change", e => {
       throw new Error(e.message === "changed" ? T("changed") : declined(e) ? T("youdeclined") : T("nosign", { err: e.message || e }));
     }
   }
-  async function sendOp(type, body, say = tell) {
+  async function sendOp(type, body, say = tell, restage = null) {
     const author = b64(me.pub);
     const s = await getJSON("/v1/seq?author=" + encodeURIComponent(author));
     if (!s.r.ok) throw new Error(s.out.error || T("http", { code: s.r.status }));
@@ -2045,8 +2062,34 @@ document.addEventListener("change", e => {
     say(T("waiting"));
     const sig = await signed(msg);
     say(T(type === "profile.set" ? "saving" : "sending"));
-    const { r, out } = await getJSON("/v1/msg", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ envelope: b64(env), sig: b64(sig) }) });
+    // What was signed is sent until the hub answers. The hub knows a
+    // message by its id, so the same envelope again makes no second post:
+    // one whose answer was lost comes back "duplicate", with its id. A hub
+    // that no longer holds a picture the post names (the draft lapsed
+    // while the wallet was open) is sent the bytes again by restage, then
+    // this same envelope. Neither asks the wallet a second time.
+    const sent = JSON.stringify({ envelope: b64(env), sig: b64(sig) });
+    let r, out;
+    for (let tries = 0, again = !!restage; ; tries++) {
+      const wait = () => new Promise(res => setTimeout(res, 1000 * (tries + 1)));
+      try {
+        ({ r, out } = await getJSON("/v1/msg", { method: "POST", headers: { "Content-Type": "application/json" }, body: sent }));
+      } catch (e) {
+        if (tries >= 2) throw e;
+        await wait();
+        continue;
+      }
+      // a gateway's own answer, not the hub's: the hub may or may not have heard
+      if (r.status >= 502 && !out.error && tries < 2) { await wait(); continue; }
+      if (r.status === 400 && out.code === "no_pin" && again) {
+        again = false;
+        say(T("uploading"));
+        await restage();
+        say(T("sending"));
+        continue;
+      }
+      break;
+    }
     if (r.ok) return out.id;
     if (r.status === 429) {
       until = Date.now() + (parseInt(r.headers.get("Retry-After"), 10) || verdict.cooldown || 60) * 1000;
@@ -2342,13 +2385,15 @@ document.addEventListener("change", e => {
     }
   });
   // The post as the window stands: the words, the reply it answers, and
-  // what is attached, which is a drawing or nothing. Post sends it, and
-  // so does the pad's Send, so the words, the mentions and the reply
-  // target go with a drawing. A post needs words or an embed (the hub's
-  // rule, envelope.go), so a drawing goes without words too. say shows
-  // the steps where the writer is looking. It answers whether the page
-  // stays: false when it is loading again to show the post.
-  async function post(embeds, say) {
+  // what is attached: the window's pictures, or the pad's drawing. Post
+  // sends it, and so does the pad's Send, so the words, the mentions and
+  // the reply target go with a drawing. A post needs words or an embed
+  // (the hub's rule, envelope.go), so pictures and a drawing go without
+  // words too. say shows the steps where the writer is looking; restage
+  // sends the embeds' bytes again when the hub has let their drafts
+  // lapse. It answers whether the page stays: false when it is loading
+  // again to show the post.
+  async function post(embeds, say, restage) {
     const t = withIds(text.value.trim());
     // the post answered is settled now, before the wallet's prompt
     const to = target ? target.id : replyTo;
@@ -2356,7 +2401,7 @@ document.addEventListener("change", e => {
     if (t) body.text = t;
     if (embeds) body.embeds = embeds;
     if (to) body.reply_to = to;
-    const id = await sendOp("post.create", body, say);
+    const id = await sendOp("post.create", body, say, restage);
     text.value = "";
     picked.clear();
     if (target && target.id === to) { target = null; showTarget(); }
@@ -2373,17 +2418,114 @@ document.addEventListener("change", e => {
     return true;
   }
   send.addEventListener("click", async () => {
-    if (!text.value.trim() || busy || !me || (target && target.gone)) return;
+    if ((!text.value.trim() && !atts.length) || atts.some(a => !a.cid) || busy || !me || (target && target.gone)) return;
     busy = true;
     render();
+    showAtts();
     try {
-      await post(null, tell);
+      let embeds = null;
+      if (atts.length) {
+        if (atts.some(stale)) { tell(T("uploading")); await restage(false); }
+        embeds = atts.map(a => ({ cid: a.cid, mime: a.mime, filename: a.name }));
+      }
+      const stays = await post(embeds, tell, embeds ? () => restage(true) : null);
+      if (stays) clearAtts();
     } catch (e) {
       flash = e.message;
     } finally {
       busy = false;
       render();
+      showAtts();
     }
+  });
+
+  // ---- pictures (PLAN.md, Draft uploads) ----
+  // A picture goes to the hub unsigned, as a draft: the hub answers the
+  // CID the file would have and holds the bytes ten minutes, in no store
+  // and behind no address. The post that names the CID is the one thing
+  // the wallet signs, and what makes the hub keep the file. A draft past
+  // DRAFT_FRESH is sent again before the wallet is asked; one that lapses
+  // while the wallet is open is sent again after, with the envelope
+  // already signed (sendOp). Either way the wallet is asked once.
+  const ATT_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+  const DRAFT_FRESH = 5 * 60 * 1000;
+  async function stage(body) {
+    const { r, out } = await getJSON("/v1/draft", { method: "POST", body, headers: { "Content-Type": "application/octet-stream" } });
+    if (r.ok && out.cid) return out;
+    throw new Error(r.status === 413 ? T("pic.max") : r.status === 415 ? T("pic.type") : r.status === 429 ? T("att.busy")
+      : r.status === 503 ? T("pic.store") : out.error || T("http", { code: r.status }));
+  }
+  const stale = a => Date.now() - a.at > DRAFT_FRESH;
+  async function restage(all) {
+    for (const a of atts) if (all || stale(a)) { await stage(a.body); a.at = Date.now(); }
+  }
+  const attSize = n => n < 1024 ? n + " B" : n < 1 << 20 ? Math.round(n / 1024) + " KB" : (n / (1 << 20)).toFixed(1) + " MB";
+  // a name the envelope takes: 128 bytes at the most
+  const attName = (f, mime) => f.name && bytes(f.name) <= 128 ? f.name : "picture." + (mime.split("/")[1] || "png");
+  function showAtts() {
+    attsBox.replaceChildren(...atts.map(a => {
+      const row = attTpl.content.firstElementChild.cloneNode(true);
+      row.querySelector("img").src = a.url;
+      row.querySelector(".att-name").textContent = a.name;
+      row.querySelector(".att-size").textContent = a.cid ? attSize(a.size) : T("att.wait");
+      const x = row.querySelector(".att-x");
+      x.setAttribute("aria-label", T("att.remove", { name: a.name }));
+      x.disabled = busy;
+      x.addEventListener("click", () => { if (!busy) { flash = ""; dropAtt(a); } });
+      return row;
+    }));
+  }
+  function dropAtt(a) {
+    atts = atts.filter(x => x !== a);
+    URL.revokeObjectURL(a.url);
+    showAtts();
+    render();
+  }
+  function clearAtts() {
+    for (const a of atts) URL.revokeObjectURL(a.url);
+    atts = [];
+    showAtts();
+  }
+  async function attach(files) {
+    flash = "";
+    for (const f of files) {
+      if (atts.length >= ATT_MAX) { tell(T("att.max")); break; }
+      if (!ATT_TYPES.includes(f.type)) { tell(T("pic.type")); continue; }
+      if (f.size > MAX_PICTURE) { tell(T("pic.max")); continue; }
+      const a = { name: attName(f, f.type), mime: f.type, size: f.size, body: null, url: URL.createObjectURL(f), cid: "", at: 0 };
+      atts.push(a);
+      showAtts();
+      render();
+      try {
+        const body = new Uint8Array(await f.arrayBuffer());
+        const out = await stage(body);
+        // the same picture twice is one picture
+        if (!atts.includes(a) || atts.some(x => x !== a && x.cid === out.cid)) { if (atts.includes(a)) dropAtt(a); continue; }
+        Object.assign(a, { body, cid: out.cid, mime: out.mime, at: Date.now() });
+      } catch (e) {
+        if (atts.includes(a)) dropAtt(a);
+        tell(e.message);
+      }
+      showAtts();
+      render();
+    }
+  }
+  attBtn.addEventListener("click", () => { if (!attBtn.disabled) attFile.click(); });
+  attFile.addEventListener("change", () => { const fs = [...attFile.files]; attFile.value = ""; attach(fs); });
+  // a picture pasted into the words, or dropped on the window, is attached
+  const pictures = list => [...(list || [])].filter(f => ATT_TYPES.includes(f.type));
+  text.addEventListener("paste", e => {
+    const fs = pictures(e.clipboardData && e.clipboardData.files);
+    if (!fs.length || attBtn.disabled) return;
+    e.preventDefault();
+    attach(fs);
+  });
+  box.addEventListener("dragover", e => { if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) e.preventDefault(); });
+  box.addEventListener("drop", e => {
+    if (!e.dataTransfer || ![...e.dataTransfer.types].includes("Files")) return;
+    e.preventDefault();
+    const fs = pictures(e.dataTransfer.files);
+    if (fs.length && !attBtn.disabled) attach(fs);
   });
   // ---- the profile dialog: the name and what the address holds ----
   let editing = false;
@@ -2980,7 +3122,7 @@ document.addEventListener("change", e => {
     hit(rub, () => { d.tool = "rub"; show(); });
     hit(thin, () => { d.thick = false; show(); });
     hit(thick, () => { d.thick = true; show(); });
-    const changed = () => { d.cid = ""; show(); }; // the file the hub holds is another drawing's now
+    const changed = () => { d.cid = ""; d.body = null; show(); }; // the file the hub holds is another drawing's now
     const undoIt = () => {
       if (undo.disabled || stroke) return;
       rec.ops.push([-1]);
@@ -3081,20 +3223,17 @@ document.addEventListener("change", e => {
       say(T("sending"));
       let stays = true, failed = null;
       try {
-        if (!d.cid) {
-          const body = new Uint8Array(await (await drawingFile(rec)).arrayBuffer());
-          const ts = String(Date.now());
-          const digest = await sha256hex(body);
-          say(T("draw.wait.file"));
-          const sig = await signed(enc.encode(UPLOAD + ts + "\n" + digest));
+        // the drawing goes up as a draft (Draft uploads, above): the post
+        // is the one thing the wallet signs
+        if (!d.cid || Date.now() - d.at > DRAFT_FRESH) {
+          if (!d.body) d.body = new Uint8Array(await (await drawingFile(rec)).arrayBuffer());
           say(T("uploading"));
-          const { r, out } = await getJSON("/v1/upload", { method: "POST", body,
-            headers: { "Content-Type": "image/png", "X-Hub-Author": b64(me.pub), "X-Hub-Ts": ts, "X-Hub-Sig": b64(sig) } });
-          if (!r.ok) throw new Error(r.status === 503 ? T("pic.store") : out.error || T("http", { code: r.status }));
-          d.cid = out.cid;
+          d.cid = (await stage(d.body)).cid;
+          d.at = Date.now();
         }
         stays = await post([{ cid: d.cid, mime: "image/png", filename: "drawing.png", width: w, height: h }],
-          t => say(t === T("waiting") ? T("draw.wait.post") : t));
+          t => say(t === T("waiting") ? T("draw.wait.post") : t),
+          async () => { await stage(d.body); d.at = Date.now(); });
         drawing = null;
       } catch (e) {
         failed = e.message || held() || line(0);
@@ -3194,7 +3333,8 @@ document.addEventListener("change", e => {
     <div class="row who-row"><span class="grow who-wrap"><a class="me-av" aria-label="{{T "yourpage"}}" hidden><img alt=""></a><span class="who"><b class="name">…</b> <span class="mono id"></span></span></span><button type="button" class="btn profile-btn">{{T "profile"}}</button><button type="button" class="btn signout">{{T "signout"}}</button></div>
     {{if .ReplyTo}}<div class="row re-row" hidden><span class="grow re-q"></span><button type="button" class="btn re-clear" aria-label="{{T "re.clear"}}">{{template "cross"}}</button></div>
     {{end}}<div class="field"><textarea class="text" placeholder="{{if .ReplyTo}}{{T "placeholder.reply"}}{{else}}{{T "placeholder.post"}}{{end}}" aria-label="{{if .ReplyTo}}{{T "text.reply"}}{{else}}{{T "text.post"}}{{end}}"></textarea><div class="at-list" role="listbox" aria-label="{{T "mention"}}" hidden></div></div>
-    <div class="row"><span class="grow status">{{T "checking"}}</span><button type="button" class="btn draw-btn" aria-label="{{T "draw"}}" disabled>{{template "pad"}}<span>{{T "draw"}}</span></button><button type="button" class="btn send" disabled>{{if .ReplyTo}}{{T "reply"}}{{else}}{{T "post"}}{{end}}</button></div>
+    <div class="atts"></div><input type="file" class="att-file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden><template class="att-tpl"><div class="row att-row"><span class="att-th"><img alt=""></span><span class="grow att-q"><b class="att-name"></b> <span class="att-size"></span></span><button type="button" class="btn re-clear att-x">{{template "cross"}}</button></div></template>
+    <div class="row"><span class="grow status">{{T "checking"}}</span><button type="button" class="btn att-btn" aria-label="{{T "attach"}}" disabled>{{template "clip"}}<span>{{T "attach"}}</span></button><button type="button" class="btn draw-btn" aria-label="{{T "draw"}}" disabled>{{template "pad"}}<span>{{T "draw"}}</span></button><button type="button" class="btn send" disabled>{{if .ReplyTo}}{{T "reply"}}{{else}}{{T "post"}}{{end}}</button></div>
   </div>
   <div class="veil" hidden>
     <div class="dlg" role="dialog" aria-modal="true" aria-label="{{T "profile.title"}}">
@@ -3220,6 +3360,7 @@ document.addEventListener("change", e => {
 {{define "cross"}}<svg class="x" viewBox="0 0 8 8" width="8" height="8" aria-hidden="true"><path class="k" d="M0 0h1v1h-1zM7 0h1v1h-1zM1 1h1v1h-1zM6 1h1v1h-1zM2 2h1v1h-1zM5 2h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM2 5h1v1h-1zM5 5h1v1h-1zM1 6h1v1h-1zM6 6h1v1h-1zM0 7h1v1h-1zM7 7h1v1h-1z"/></svg>{{end}}
 
 {{/* Draw…'s glyph, the Hub app's: a pad with a line on it */}}
+{{define "clip"}}<svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="k" d="M4 0h4v1h-4zM3 1h1v9h-1zM8 1h1v10h-1zM5 3h1v8h-1zM6 11h2v1h-2z"/></svg>{{end}}
 {{define "pad"}}<svg class="gl" viewBox="0 0 13 13" width="13" height="13" aria-hidden="true"><path class="w" d="M1 2h11v9h-11z"/><path class="k" d="M0 1h13v1h-13zM0 2h1v9h-1zM12 2h1v9h-1zM0 11h13v1h-13zM2 8h1v1h-1zM3 7h1v1h-1zM4 6h2v1h-2zM6 7h1v1h-1zM7 8h2v1h-2zM9 7h1v1h-1zM10 5h1v2h-1z"/></svg>{{end}}
 
 {{define "spark"}}<svg viewBox="0 0 14 14" aria-hidden="true"><path class="k" d="M11 0h1v1h-1zM10 1h1v1h-1zM12 1h1v1h-1zM9 2h1v1h-1zM13 2h1v1h-1zM5 3h1v1h-1zM10 3h1v1h-1zM12 3h1v1h-1zM5 4h1v1h-1zM11 4h1v1h-1zM4 5h1v1h-1zM6 5h1v1h-1zM4 6h1v1h-1zM6 6h1v1h-1zM2 7h2v1h-2zM7 7h2v1h-2zM0 8h2v1h-2zM9 8h2v1h-2zM2 9h2v1h-2zM7 9h2v1h-2zM4 10h1v1h-1zM6 10h1v1h-1zM4 11h1v1h-1zM6 11h1v1h-1zM5 12h1v1h-1zM5 13h1v1h-1z"/><path class="f" d="M11 1h1v1h-1zM11 2h1v1h-1zM11 3h1v1h-1zM5 7h2v1h-2zM2 8h4v1h-4z"/><path class="s" d="M12 2h1v1h-1zM6 8h3v1h-3zM4 9h3v1h-3zM5 10h1v1h-1zM5 11h1v1h-1z"/><path class="w" d="M10 2h1v1h-1zM5 5h1v1h-1zM5 6h1v1h-1zM4 7h1v1h-1z"/></svg>{{end}}

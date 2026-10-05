@@ -2473,6 +2473,14 @@ func (s *Store) Profile(id string) (*Profile, error) {
 	return p, err
 }
 
+// Known reports whether the log already holds a message: what ingest
+// answers ErrDuplicate for, asked before anything is done for it.
+func (s *Store) Known(id string) (bool, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE id=?`, id).Scan(&n)
+	return n > 0, err
+}
+
 // Seq is the last accepted seq for an author pubkey (0 if none) — clients
 // fetch it to number their next message.
 func (s *Store) Seq(author string) (int64, error) {

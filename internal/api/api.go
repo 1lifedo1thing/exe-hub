@@ -1,7 +1,9 @@
 // Package api is exe-hub's HTTP surface. Reads are public (CORS *); writes
 // authenticate by ed25519 signature alone — POST /v1/msg carries a signed
-// envelope, POST /v1/upload a signed digest. Policy (gate, bans, admin)
-// is enforced here at ingest; the store below assumes verified input.
+// envelope, POST /v1/upload a signed digest. POST /v1/draft takes a
+// picture unsigned and only holds it: the signed post that names it is
+// what keeps it (draft.go). Policy (gate, bans, admin) is enforced here
+// at ingest; the store below assumes verified input.
 package api
 
 import (
@@ -54,6 +56,7 @@ type Server struct {
 
 	gateLimit bucket // uncached /v1/gate checks, each an RPC call
 	ping      pingCache
+	drafts    drafts // pictures uploaded unsigned, waiting for their post (draft.go)
 }
 
 // pingCache is the heartbeat's data: the counts the feed's strip shows —
@@ -201,6 +204,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/hub", s.handleHub)
 	mux.HandleFunc("POST /v1/msg", s.handleMsg)
 	mux.HandleFunc("POST /v1/upload", s.handleUpload)
+	mux.HandleFunc("POST /v1/draft", s.handleDraft)
 	mux.HandleFunc("POST /v1/avatar", s.handleAvatar)
 	mux.HandleFunc("POST /v1/media", s.handleMedia)
 	mux.HandleFunc("GET /v1/media/{job}", s.handleMediaJob)
@@ -457,6 +461,16 @@ func (s *Server) handleMsg(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, errors.New("a hub cannot peer with itself"))
 		return
 	}
+	// A message the hub already holds is answered before any policy: a
+	// page whose answer was lost sends the same envelope again, and must
+	// hear of its post rather than of the cooldown that post started.
+	if known, err := s.St.Known(envelope.MsgID(in.Envelope)); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	} else if known {
+		writeJSON(w, http.StatusOK, map[string]string{"id": envelope.MsgID(in.Envelope), "status": "duplicate"})
+		return
+	}
 	if err := s.policy(e); err != nil {
 		var cd *cooldownError
 		if errors.As(err, &cd) {
@@ -480,6 +494,22 @@ func (s *Server) handleMsg(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if pc, ok := op.(*envelope.PostCreate); ok && len(pc.Embeds) > 0 {
+		// Draft uploads the post names are kept now that a key that may
+		// post has signed for them — unless the seq is stale and the store
+		// is about to refuse the message without looking at an embed.
+		last, err := s.St.Seq(e.Author)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		if e.Seq > last {
+			if err := s.promoteDrafts(pc); err != nil {
+				writeErr(w, http.StatusBadGateway, err)
+				return
+			}
+		}
+	}
 	id, unpin, err := s.St.Ingest(in.Envelope, in.Sig, e, op)
 	switch {
 	case errors.Is(err, store.ErrDuplicate):
@@ -488,7 +518,12 @@ func (s *Server) handleMsg(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, store.ErrStaleSeq):
 		writeErr(w, http.StatusConflict, err)
 		return
-	case errors.Is(err, store.ErrNotOwner), errors.Is(err, store.ErrNoPin),
+	case errors.Is(err, store.ErrNoPin):
+		// said by name: a page whose draft lapsed while the wallet was
+		// open sends the bytes again and this same envelope after them
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error(), "code": "no_pin"})
+		return
+	case errors.Is(err, store.ErrNotOwner),
 		errors.Is(err, store.ErrNotAvatar), errors.Is(err, store.ErrNotFound), errors.Is(err, store.ErrFacts):
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -664,8 +699,13 @@ func (s *Server) pinBytes(w http.ResponseWriter, body []byte, mime string, avata
 	return cid, true
 }
 
+// readUpload reads a file's bytes, up to the embed cap.
+func readUpload(w http.ResponseWriter, r *http.Request) ([]byte, error) {
+	return io.ReadAll(http.MaxBytesReader(w, r.Body, MaxUpload))
+}
+
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, MaxUpload))
+	body, err := readUpload(w, r)
 	if err != nil {
 		writeErr(w, http.StatusRequestEntityTooLarge, fmt.Errorf("embeds are capped at %dMB", MaxUpload>>20))
 		return

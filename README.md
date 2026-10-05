@@ -145,6 +145,10 @@ Embeds are uploaded through the hub only: `POST /v1/upload` with a signed
 digest, at most 8 MB, the real MIME sniffed rather than trusted, then
 added and pinned in kubo and the CID returned. `POST /v1/avatar` does the
 same for profile pictures and normalizes them to a 128×128 PNG first.
+A picture can also go up unsigned, as a draft: `POST /v1/draft` answers
+the CID it would have and only holds the bytes, ten minutes, in memory.
+The signed post that names the CID is what adds and pins the file, so a
+wallet on the public pages signs once for a post and its pictures.
 Pins are refcounted, and a delete that drops a CID to zero unpins it.
 `GET /v1/embed/{cid}` serves pinned content with immutable cache headers,
 so a client needs no gateway of its own.
@@ -158,6 +162,7 @@ signatures and never a cookie. Writes authenticate by signature alone.
 |---|---|
 | `POST /v1/msg` | every mutation, as a signed envelope |
 | `POST /v1/upload`, `POST /v1/avatar` | embed and avatar minting, signed |
+| `POST /v1/draft` | a picture held unsigned until a signed post names its CID |
 | `GET /v1/hub` | id, pubkey, gate mode, replication flag, live counts, push key |
 | `GET /v1/gate?author=` | whether a key may post now: gate verdict, ban, cooldown wait |
 | `GET /v1/seq?author=` | an author's last accepted `seq` |

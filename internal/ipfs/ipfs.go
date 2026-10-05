@@ -1,4 +1,4 @@
-// Package ipfs is a minimal kubo RPC client: add-and-pin, pin, unpin, list pins, and cat.
+// Package ipfs is a minimal kubo RPC client: add-and-pin, hash, pin, unpin, list pins, and cat.
 // The hub owns all pinned content (v1 is hub-mediated upload only), so cat
 // only ever streams CIDs the hub itself pinned — no untrusted fetches.
 package ipfs
@@ -48,6 +48,20 @@ func (c *Client) Available() error {
 // request on kubo's side and the pin is lost while the blocks stay (that
 // race left 63 of 152 uploads unpinned by 2026-09-09).
 func (c *Client) Add(r io.Reader, name string) (string, error) {
+	return c.add(r, name, "pin=true&cid-version=1")
+}
+
+// Hash answers the CID Add would give the bytes, and stores nothing:
+// kubo's only-hash chunks and hashes without writing a block or a pin.
+// The import settings are Add's own (cid-version=1 and nothing else), so
+// the same bytes on the same kubo get the same CID — what lets a draft
+// upload be named in a post before the file is kept (PLAN.md, Draft
+// uploads).
+func (c *Client) Hash(r io.Reader, name string) (string, error) {
+	return c.add(r, name, "only-hash=true&cid-version=1")
+}
+
+func (c *Client) add(r io.Reader, name, query string) (string, error) {
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
 	go func() {
@@ -60,7 +74,7 @@ func (c *Client) Add(r io.Reader, name string) (string, error) {
 		}
 		pw.CloseWithError(err)
 	}()
-	resp, err := c.client.Post(c.api+"/api/v0/add?pin=true&cid-version=1", mw.FormDataContentType(), pr)
+	resp, err := c.client.Post(c.api+"/api/v0/add?"+query, mw.FormDataContentType(), pr)
 	if err != nil {
 		return "", err
 	}
