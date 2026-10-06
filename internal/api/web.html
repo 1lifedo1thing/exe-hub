@@ -1934,10 +1934,20 @@ document.addEventListener("change", e => {
     const pub = typeof saved.address === "string" && unb58(saved.address);
     if (!pub || pub.length !== 32) return null;
     let live = null;
+    // While the wallet is being asked, Sign Out can be pressed or the
+    // window turn to another account: this identity is then no longer the
+    // window's (`me`), and nothing more is asked of the wallet — not the
+    // connect aloud after a silent one that brought nothing, not the
+    // signature (Codex on Spark, 2026-10-06: Sign Out during a reconnect
+    // that came back on the same account still raised the prompt). The
+    // error is empty; signed() says what there is to say (mine).
+    const still = () => { if (me !== m) throw new Error(""); };
     const m = { wallet: w, name: w.name, address: saved.address, pub, live: false,
       sign: async msg => {
         if (!live) {
-          const got = await connect(w, true).catch(() => null) || await connect(w, false);
+          let got = await connect(w, true).catch(() => null);
+          still();
+          if (!got) { got = await connect(w, false); still(); }
           if (got.address !== m.address) throw Object.assign(new Error("switched"), { account: got });
           live = got;
           m.live = true;
@@ -2166,6 +2176,10 @@ document.addEventListener("change", e => {
       // a remembered wallet came back on another account: the window turns
       // to it, unless Sign Out was pressed or it has turned already
       if (e.account) { if (me === who) signedIn(e.account); throw new Error(me ? T("switched") : ""); }
+      // no longer this send's account (Sign Out, or the window turned,
+      // while the wallet was asked): said as any such stop is, or not at
+      // all, never as an error of the wallet's
+      mine(who);
       throw new Error(e.message === "changed" ? T("changed") : declined(e) ? T("youdeclined") : T("nosign", { err: e.message || e }));
     }
     mine(who, true);

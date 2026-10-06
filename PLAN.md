@@ -1169,11 +1169,21 @@ hub that carries the post.
   window's cooldown clock and gate follow a send's answer only while
   the window is still that account's. A remembered wallet that comes
   back on another account after Sign Out was pressed no longer signs
-  the page in again. The walk is
+  the page in again. Nor is one that comes back on the same account
+  asked for anything more (Codex on Spark again, the same day): the
+  remembered identity's `sign` connects silently, then aloud, then
+  signs, and between each step asks whether it is still the window's
+  (`still`), so Sign Out pressed while the wallet is being asked means
+  no connect window and no signature prompt; and `signed()`'s catch
+  asks `mine(who)` before it words a wallet error, so such a stop is
+  silent (or `switched`), never "The wallet could not sign". The walk is
   `~/tools/playwright/exe-hub-wallet/wallet-switch-e2e.js` (seq held
   then a change, then Sign Out; the prompt held then a change; a
-  Delete), which fails on the hub before this. exe-planet's Platinum
-  and Paper templates carry a copy of this composer and want the same.
+  Delete; a reconnect held then Sign Out, the wallet answering as
+  another account, as the same one, or not at all), which fails on the
+  hub before each change. exe-planet's Platinum and Paper templates
+  carry a copy of this composer and have the same (exe-planet's PLAN.md,
+  Replies from the hub).
   On a phone (a coarse pointer) with no Solana wallet there is no Post
   window at all (2026-09-14): the script classes `<html>` `solana` the
   moment a wallet announces itself (or `window.solana` is there), and

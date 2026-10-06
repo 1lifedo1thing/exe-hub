@@ -1358,13 +1358,17 @@ func TestWebSendKeepsItsAccount(t *testing.T) {
 		`await sendOp("post.create", body, say, restage, who);`,
 		`"X-Hub-Author": b64(who.pub)`,
 		`Your wallet changed to another account, shown above, while it was signing.`,
+		// a remembered wallet being asked again: once it is no longer the
+		// window's, no connect aloud and no signature
+		`const still = () => { if (me !== m) throw new Error(""); };`,
+		`let got = await connect(w, true).catch(() => null);`, `if (!got) { got = await connect(w, false); still(); }`,
 	} {
 		if !strings.Contains(home, want) {
 			t.Errorf("home lacks %q", want)
 		}
 	}
 	// nothing signs as whoever happens to be signed in when its turn comes
-	for _, not := range []string{`await me.sign(`, `signed(msg);`, `"X-Hub-Author": b64(me.pub)`} {
+	for _, not := range []string{`await me.sign(`, `signed(msg);`, `"X-Hub-Author": b64(me.pub)`, `connect(w, true).catch(() => null) || await connect(w, false)`} {
 		if strings.Contains(home, not) {
 			t.Errorf("home still carries %q", not)
 		}
