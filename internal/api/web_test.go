@@ -1417,7 +1417,7 @@ func TestWebDelete(t *testing.T) {
 			t.Errorf("%s: the Delete button is not kept to the reader's own posts", path)
 		}
 		if !strings.Contains(body, `'.post[data-au="' + w.id + '"] .del { display: inline-block; } .post[data-au="' + w.id + '"] .foot.own { display: flex; }'`) ||
-			!strings.Contains(body, `remember({ name: me.name, address: me.address, id: st.v.profile })`) {
+			!strings.Contains(body, `remember({ name: me.name, address: me.address, id: st.v.profile,`) {
 			t.Errorf("%s: no script writes the own-post rule", path)
 		}
 		if !strings.Contains(body, `sendOp("post.delete", { post: post.id }, tell)`) {

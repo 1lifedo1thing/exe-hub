@@ -1124,6 +1124,16 @@ hub that carries the post.
   account's. A Wallet Standard `change` to no accounts signs the page
   out only from a wallet that handed over its account on this visit;
   a change to another account turns the window to it with no connect.
+  **The who line from the first paint (2026-10-05).** The page drew
+  "…" and no picture, then the short address, then the name and
+  picture once the gate and the profile came back — on every page
+  load (Livid: "an unwanted flash"). The gate's answer now remembers
+  the profile's name and picture CID beside the id, and a script
+  inside the Post window, right after the who line's markup, draws
+  them as the page is parsed; the answer on this visit redraws the
+  same line, or what changed since. The status line still begins at
+  "Checking this address…": what it says next is the gate's verdict
+  of the moment (a cooldown, a holding), not a thing to remember.
   On a phone (a coarse pointer) with no Solana wallet there is no Post
   window at all (2026-09-14): the script classes `<html>` `solana` the
   moment a wallet announces itself (or `window.solana` is there), and

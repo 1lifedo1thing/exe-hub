@@ -2027,7 +2027,11 @@ document.addEventListener("change", e => {
     // under its own posts follow it, and it is remembered so the next
     // visit shows them before layout (the head script writes the rule)
     showOwn(st.v.profile);
-    remember({ name: me.name, address: me.address, id: st.v.profile });
+    // with the profile's name and picture, which the next visit's who
+    // line is drawn from as the page is parsed (the compose window's own
+    // script), so it shows them from the first paint
+    remember({ name: me.name, address: me.address, id: st.v.profile,
+      pname: st.profile && st.profile.name || "", ava: st.profile && st.profile.avatar || "" });
     // and the Notify subscription follows it (the Notify script listens)
     document.dispatchEvent(new CustomEvent("exe-hub-id", { detail: st.v.profile }));
     q(".id").textContent = st.v.profile;
@@ -2062,13 +2066,17 @@ document.addEventListener("change", e => {
     // the same wallet as last time keeps its remembered id, so its own
     // posts wear their Delete buttons from the first paint; another
     // account's do not — the buttons stand down until the gate names it
+    // — and its who line, drawn already, stands until the gate's answer
+    // redraws it the same or with what changed since
     const before = recall(), same = before && before.address === me.address;
     if (!same) { showOwn(""); disarm(); }
-    remember({ name: me.name, address: me.address, id: same ? before.id : undefined });
+    remember(same ? Object.assign(before, { name: me.name }) : { name: me.name, address: me.address });
     root.classList.add("wallet");
-    q(".name").textContent = "…";
-    q(".id").textContent = short(me.address);
-    meAva("");
+    if (!same || !before.id) {
+      q(".name").textContent = "…";
+      q(".id").textContent = short(me.address);
+      meAva("");
+    }
     flash = "";
     watch(w);
     await check();
@@ -3435,6 +3443,18 @@ document.addEventListener("change", e => {
   </div>
   <div class="in">
     <div class="row who-row"><span class="grow who-wrap"><a class="me-av" aria-label="{{T "yourpage"}}" hidden><img alt=""></a><span class="who"><b class="name">…</b> <span class="mono id"></span></span></span><button type="button" class="btn profile-btn">{{T "profile"}}</button><button type="button" class="btn signout">{{T "signout"}}</button></div>
+    <script>// a wallet signed in before: its who line as the gate last drew it, from the first paint
+    (() => { try {
+      const w = JSON.parse(localStorage.getItem("exe-hub-wallet") || "null"), row = document.currentScript.previousElementSibling;
+      if (!w || !/^[0-9a-f]{16}$/.test(w.id || "") || typeof w.address !== "string") return;
+      const ava = /^[a-z0-9]+$/i.test(w.ava || "") ? w.ava : "", a = row.querySelector(".me-av"), img = a.querySelector("img");
+      row.querySelector(".name").textContent = w.pname || T("noname");
+      Object.assign(row.querySelector(".id"), { textContent: w.id, title: w.address });
+      img.src = ava ? "/v1/embed/" + ava : "/v1/identicon/" + w.id + ".svg";
+      img.classList.toggle("idn", !ava);
+      a.href = "/u/" + w.id;
+      a.hidden = false;
+    } catch (e) {} })();</script>
     {{if .ReplyTo}}<div class="row re-row" hidden><span class="grow re-q"></span><button type="button" class="btn re-clear" aria-label="{{T "re.clear"}}">{{template "cross"}}</button></div>
     {{end}}<div class="field"><textarea class="text" placeholder="{{if .ReplyTo}}{{T "placeholder.reply"}}{{else}}{{T "placeholder.post"}}{{end}}" aria-label="{{if .ReplyTo}}{{T "text.reply"}}{{else}}{{T "text.post"}}{{end}}"></textarea><div class="at-list" role="listbox" aria-label="{{T "mention"}}" hidden></div></div>
     <div class="atts"></div><input type="file" class="att-file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden><template class="att-tpl"><div class="row att-row"><span class="att-th"><img alt=""></span><span class="grow att-q"><b class="att-name"></b> <span class="att-size"></span></span><button type="button" class="btn re-clear att-x">{{template "cross"}}</button></div></template>
