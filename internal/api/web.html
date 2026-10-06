@@ -84,6 +84,15 @@ a.mention { text-decoration: none; }
 @media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
   .desk .join { display: none; }
 }
+/* on a phone — the stacked desk, the join window above the Post window
+   — a reader signed in with a wallet has joined: the feed comes up
+   under the Post window. The class is the head script's (a wallet that
+   signed in before) and the sign-in's, so a returning reader's join
+   window is gone before layout; Sign Out brings it back. From 1060px it
+   stands at the side, out of the column's way, and stays. */
+@media (max-width: 1059px) {
+  .wallet .desk .join { display: none; }
+}
 /* a thread page is a desk too (PLAN.md, Thread summaries): the Reply
    strip and the thread in the column, and at the column's left, once
    there is room, the side the join window takes on the home page —

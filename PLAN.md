@@ -1264,6 +1264,13 @@ hub that carries the post.
   fullscreen, minimal-ui) hides the join window; the same URL in a
   browser tab shows it. The HTML is the same either way (a request
   carries no display mode), so the live feed's swap is untouched.
+  **Signed in on a phone (Livid, 2026-10-05)** the join window goes
+  too: narrower than 1060px, where the desk is stacked and the join
+  window stands above the Post window, `<html class="wallet">` hides
+  it — the head script's class for a wallet that signed in before, so
+  a returning reader's is gone before layout, and the sign-in's; Sign
+  Out (or a remembered wallet that is gone now) brings it back. From
+  1060px it sits at the side, out of the column's way, and stays.
 - **robots.txt (2026-09-24).** `/robots.txt` welcomes crawlers to the
   feed, the threads and the profiles and closes two paths, `/stats` and
   `/v1/stats`: the stats desk links every filter, range and view, and
