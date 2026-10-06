@@ -2047,18 +2047,41 @@ document.addEventListener("change", e => {
     try { adopt(await load()); } catch (e) { if (me) tell(e.message); }
   }
 
-  // Sign in with Solana, pressed
+  // Sign in with Solana, pressed. A wallet that still trusts the hub
+  // connects without a word, even after Sign Out — which forgets the
+  // wallet here and asks it to disconnect, but only the wallet keeps its
+  // list of trusted sites. So the first Sign in after a Sign Out pressed
+  // in this browser asks for a signature too, the one request every
+  // wallet puts to its owner (Livid, 2026-10-06: "i expect to see
+  // prompt again"): with Sign In With Solana, one prompt for both;
+  // otherwise a connect, then a message that says what it is. Never
+  // "exe-hub:v1", so it can be nothing the hub would take, and it is
+  // kept nowhere.
+  const OUT = "exe-hub-signed-out";
+  const wasOut = () => { try { return !!localStorage.getItem(OUT); } catch (e) { return false; } };
   async function start(w) {
     let got;
     try {
-      got = await connect(w, false);
+      got = wasOut() ? await confirm(w) : await connect(w, false);
     } catch (e) {
       me = null;
       signedOut();
       note.textContent = declined(e) ? T("declined") : T("noconnect", { err: e.message || e });
       return;
     }
+    try { localStorage.removeItem(OUT); } catch (e) {}
     await signedIn(got);
+  }
+  async function confirm(w) {
+    const stmt = T("signin.stmt"), siws = !w.legacy && w.features["solana:signIn"];
+    if (siws) {
+      const [out] = await siws.signIn({ domain: location.host, uri: location.origin, version: "1", statement: stmt, issuedAt: new Date().toISOString() });
+      if (!out || !out.account) throw new Error(T("noaccount"));
+      return bind(w, out.account);
+    }
+    const got = await connect(w, false);
+    await got.sign(enc.encode(T("signin.title", { host: location.host }) + "\n\n" + stmt + "\n\n" + new Date().toISOString()));
+    return got;
   }
   async function signedIn(m) {
     me = m;
@@ -2218,6 +2241,7 @@ document.addEventListener("change", e => {
     const w = me && me.wallet;
     me = null;
     signedOut();
+    try { localStorage.setItem(OUT, "1"); } catch (e) {} // the next Sign in asks for a signature (start)
     // Sign Out, pressed: the Notify subscription is no id's any more. A
     // wallet that could not be reached says nothing of the kind.
     document.dispatchEvent(new CustomEvent("exe-hub-id", { detail: "" }));

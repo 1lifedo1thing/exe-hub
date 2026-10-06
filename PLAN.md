@@ -1134,6 +1134,19 @@ hub that carries the post.
   same line, or what changed since. The status line still begins at
   "Checking this address…": what it says next is the gate's verdict
   of the moment (a cooldown, a holding), not a thing to remember.
+  **A Sign in after Sign Out asks for a signature (2026-10-06).** Sign
+  Out forgets the wallet here and asks it to disconnect, but the list
+  of trusted sites is the wallet's: Glow, still trusting the hub,
+  connected again without a word, and Livid expected a prompt. The one
+  request every wallet always puts to its owner is a signature, so
+  Sign Out pressed in this browser leaves a mark (localStorage
+  `exe-hub-signed-out`) and the next Sign in asks for one: Sign In
+  With Solana (`solana:signIn`, one prompt for both) where the wallet
+  has it, otherwise a connect and then a message — "Sign in to
+  <host>", what it is for, the time — that never begins `exe-hub:v1`,
+  so it can be nothing the hub takes. Kept nowhere and sent nowhere;
+  declined, the page stays signed out and the mark stays. A first
+  sign-in, never signed out here, is the connect alone, as before.
   On a phone (a coarse pointer) with no Solana wallet there is no Post
   window at all (2026-09-14): the script classes `<html>` `solana` the
   moment a wallet announces itself (or `window.solana` is there), and
