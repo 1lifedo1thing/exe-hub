@@ -802,27 +802,33 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
    Serif's own, a Simplified translation in a Traditional frame in SC);
    hairlines in the page's ink
    where Platinum draws black lines and grey fields; light or dark as
-   the reader's system is, as Paper is. The colours are Paper's, copied. */
+   the reader's system is, as Paper is. The colours are Paper's, copied,
+   and so is the text's weight: Medium in a CJK face, whose horizontal
+   strokes stay 33/1000 em at every weight and draw grey at Regular,
+   Regular in Latin letters; the Mac's own smoothing by day, grey
+   smoothing only on the night sheet. */
 .paper {
   --ground: #e3e2de; --ink: #22211f; --quiet: #6f6c66; --faint: #9a968f;
   --rule: rgba(34, 33, 31, .16); --line: rgba(34, 33, 31, .34); --wash: rgba(34, 33, 31, .05);
   --field: rgba(255, 255, 255, .38); --idn: #e6e6f5;
   --serif: "Noto Serif SC", "Noto Serif", "Songti SC", "STSong", serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  --weight: 500;
   color-scheme: light dark;
 }
 .paper:lang(zh-Hant) { --serif: "Noto Serif TC", "Noto Serif", "Songti TC", "PMingLiU", serif; }
 .paper:lang(ja) { --serif: "Noto Serif JP", "Noto Serif", "Hiragino Mincho ProN", "Yu Mincho", serif; }
-.paper:lang(en) { --serif: "Noto Serif", "Noto Serif SC", Georgia, serif; }
+.paper:lang(en) { --serif: "Noto Serif", "Noto Serif SC", Georgia, serif; --weight: 400; }
 @media (prefers-color-scheme: dark) {
   .paper {
     --ground: #1d1d1b; --ink: #dddad3; --quiet: #9a968e; --faint: #6e6b65;
     --rule: rgba(221, 218, 211, .15); --line: rgba(221, 218, 211, .35); --wash: rgba(221, 218, 211, .06);
     --field: rgba(0, 0, 0, .2); --idn: #3a3a48;
   }
+  .paper body { -webkit-font-smoothing: antialiased; }
 }
 .paper body { background: transparent; color: var(--ink); cursor: auto;
-  font: 400 16px/1.8 var(--serif); text-autospace: normal; line-break: strict; -webkit-font-smoothing: antialiased; }
+  font: var(--weight) 16px/1.8 var(--serif); text-autospace: normal; line-break: strict; }
 @media (max-width: 480px) { .paper body { font-size: 15px; } }
 .paper a { color: inherit; }
 .paper .frame { background: transparent; }
@@ -839,7 +845,7 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 .paper .meta a:hover { text-decoration: none; color: var(--ink); }
 .paper .mono { font-family: var(--mono); font-size: 11px; }
 .paper .text { margin-top: 4px; }
-.paper .text:lang(en) { font-family: "Noto Serif", var(--serif); }
+.paper .text:lang(en) { font-family: "Noto Serif", var(--serif); font-weight: 400; }
 .paper .text:lang(ja) { font-family: "Noto Serif JP", var(--serif); }
 .paper .text:lang(zh-Hans) { font-family: "Noto Serif SC", var(--serif); }
 .paper .text:lang(zh-Hant) { font-family: "Noto Serif TC", var(--serif); }

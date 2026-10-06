@@ -2908,6 +2908,11 @@ post) and the replies frame.
     dark`, so the frame stays transparent in dark too), Noto Serif from
     Google Fonts with the CJK face first (JP for a Japanese frame, else
     SC; a text whose language is English in Noto Serif's own), Paper's
+    text weight (2026-10-06, with Paper's own change: Medium in a CJK
+    face, whose horizontals are 33/1000 em at every weight and drew
+    grey at Regular; Regular in Latin letters; `-webkit-font-smoothing:
+    antialiased` only on the dark sheet, since by day it thinned dark
+    type on a Mac further), Paper's
     ink colours, hairlines where Platinum draws black lines and grey
     fields, plain hairline buttons, and the empty line exactly 56px, the
     height Paper holds open for it. The look rides the pager's links;
