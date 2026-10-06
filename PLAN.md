@@ -1147,6 +1147,33 @@ hub that carries the post.
   so it can be nothing the hub takes. Kept nowhere and sent nowhere;
   declined, the page stays signed out and the mark stays. A first
   sign-in, never signed out here, is the connect alone, as before.
+  **A send is the account's that pressed the button (2026-10-06).**
+  `sendOp` took its author from `me`, awaited `/v1/seq`, and then asked
+  whoever `me` was by then to sign: a wallet that turned from A to B
+  meanwhile (the `standard:events` change handler signs B in) was
+  asked, as B, to sign an envelope naming A, which the hub refuses; a
+  Sign Out pressed meanwhile put a script error in the status line
+  (Codex on Spark held the seq answer and showed it; Livid:
+  "Improve."). A send now keeps who it began as (`who`, taken at the
+  press) and `mine(who)` asks whether that is still `me` before the
+  wallet is asked and again before what it signed is sent, for a post,
+  a Delete, a profile and a profile picture alike. Not theirs any
+  more, the send stops there: nothing is signed — or, when the account
+  changed while the wallet's own prompt was up, what it signed goes
+  nowhere and is not held for a resend — the words and pictures stay,
+  and the status line says the wallet is on another account now
+  (`switched`, or `switched.signed` when it had signed). Sign Out, and
+  the same account signed in afresh, stop it without a line. Once the
+  message has left for the hub it is sent until the hub answers, as
+  before: it was signed and sent as the account the window showed. The
+  window's cooldown clock and gate follow a send's answer only while
+  the window is still that account's. A remembered wallet that comes
+  back on another account after Sign Out was pressed no longer signs
+  the page in again. The walk is
+  `~/tools/playwright/exe-hub-wallet/wallet-switch-e2e.js` (seq held
+  then a change, then Sign Out; the prompt held then a change; a
+  Delete), which fails on the hub before this. exe-planet's Platinum
+  and Paper templates carry a copy of this composer and want the same.
   On a phone (a coarse pointer) with no Solana wallet there is no Post
   window at all (2026-09-14): the script classes `<html>` `solana` the
   moment a wallet announces itself (or `window.solana` is there), and

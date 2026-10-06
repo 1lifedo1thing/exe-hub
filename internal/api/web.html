@@ -2136,13 +2136,36 @@ document.addEventListener("change", e => {
   }
 
   // ---- one signed message ----
-  async function signed(msg) {
+  // A send is the account's that pressed the button. While it waits — on
+  // the hub for the next seq, on a draft sent again, on the wallet's own
+  // prompt — the wallet can turn to another account or Sign Out be
+  // pressed, and `me` is then someone else or no one (Codex on Spark,
+  // 2026-10-06: with /v1/seq held and a change from A to B, B was asked
+  // to sign an envelope naming A, which the hub refuses). So a send
+  // keeps who it began as (`who`) and asks, before the wallet is asked
+  // and again before what it signed is sent, whether that is still who
+  // is signed in. If not it stops there: nothing is signed, or what was
+  // signed goes nowhere and is not held, and the words stay for a press
+  // as whoever is signed in now. Said in the status line when the
+  // account changed; Sign Out, and the same account signed in afresh,
+  // need no line.
+  function mine(who, hasSigned) {
+    if (me === who) return;
+    throw new Error(me && me.address !== who.address ? T(hasSigned ? "switched.signed" : "switched") : "");
+  }
+  async function signed(msg, who = me) {
+    mine(who);
+    let sig;
     try {
-      return await me.sign(msg);
+      sig = await who.sign(msg);
     } catch (e) {
-      if (e.account) { signedIn(e.account); throw new Error(T("switched")); } // a remembered wallet came back on another account
+      // a remembered wallet came back on another account: the window turns
+      // to it, unless Sign Out was pressed or it has turned already
+      if (e.account) { if (me === who) signedIn(e.account); throw new Error(me ? T("switched") : ""); }
       throw new Error(e.message === "changed" ? T("changed") : declined(e) ? T("youdeclined") : T("nosign", { err: e.message || e }));
     }
+    mine(who, true);
+    return sig;
   }
   // A post the wallet signed and the hub has not answered for (PLAN.md,
   // Draft uploads — an answer that never comes): what was sent, its
@@ -2151,8 +2174,8 @@ document.addEventListener("change", e => {
   // signing a second post. Only a post is parked: a profile saved twice or
   // a post deleted twice is the same thing once.
   let parked = null; // {author, key, id, sent}
-  async function sendOp(type, body, say = tell, restage = null) {
-    const author = b64(me.pub);
+  async function sendOp(type, body, say = tell, restage = null, who = me) {
+    const author = b64(who.pub);
     const isPost = type === "post.create", key = isPost ? JSON.stringify(body) : "";
     // a held post that stands as it was signed goes again as it is: no new seq, no prompt
     const resend = isPost && !!parked && parked.author === author && parked.key === key;
@@ -2161,14 +2184,17 @@ document.addEventListener("change", e => {
     else {
       const s = await getJSON("/v1/seq?author=" + encodeURIComponent(author));
       if (!s.r.ok) throw new Error(s.out.error || T("http", { code: s.r.status }));
+      mine(who); // the account changed while the hub was asked: the wallet is not
       const env = enc.encode(JSON.stringify({ type, author, seq: s.out.seq + 1, ts: Date.now(), body }));
       const msg = new Uint8Array(PREFIX.length + env.length);
       msg.set(enc.encode(PREFIX));
       msg.set(env, PREFIX.length);
       say(T("waiting"));
-      const sig = await signed(msg);
+      const sig = await signed(msg, who);
+      const id = isPost ? await sha256hex(env) : "";
+      mine(who, true); // nor is what it signed sent, from here on in one go
       sent = JSON.stringify({ envelope: b64(env), sig: b64(sig) });
-      if (isPost) parked = { author, key, id: await sha256hex(env), sent };
+      if (isPost) parked = { author, key, id, sent };
     }
     say(T(type === "profile.set" ? "saving" : "sending"));
     // What was signed is sent until the hub answers. The hub knows a
@@ -2208,17 +2234,19 @@ document.addEventListener("change", e => {
     // refused for good.
     if (isPost && r.status !== 429 && r.status < 500) parked = null;
     if (r.ok) return out.id;
+    // (the clock and the gate below are the window's: they follow this
+    // answer only while the window is still this send's account's)
     if (r.status === 429) {
-      until = Date.now() + (parseInt(r.headers.get("Retry-After"), 10) || verdict.cooldown || 60) * 1000;
+      if (me === who) until = Date.now() + (parseInt(r.headers.get("Retry-After"), 10) || verdict && verdict.cooldown || 60) * 1000;
       throw new Error("");
     }
-    if (r.status === 403) { await check(); if (verdict && verdict.gate === "below") throw new Error(""); }
+    if (r.status === 403 && me === who) { await check(); if (verdict && verdict.gate === "below") throw new Error(""); }
     if (r.status === 401) throw new Error(T("badsig"));
     if (r.status === 409) {
       // The hub looks a message up by its id before its seq, so a held
       // post it calls stale never landed: another message took its seq
       // while the answer was missing. Only now is the wallet asked again.
-      if (resend) return sendOp(type, body, say, restage);
+      if (resend) return sendOp(type, body, say, restage, who);
       throw new Error(T("landed", { btn: send.textContent }));
     }
     throw new Error(out.error || T("http", { code: r.status }));
@@ -2517,7 +2545,7 @@ document.addEventListener("change", e => {
   // sends the embeds' bytes again when the hub has let their drafts
   // lapse. It answers whether the page stays: false when it is loading
   // again to show the post.
-  async function post(embeds, say, restage) {
+  async function post(embeds, say, restage, who = me) {
     const t = withIds(text.value.trim());
     // the post answered is settled now, before the wallet's prompt
     const to = target ? target.id : replyTo;
@@ -2529,8 +2557,8 @@ document.addEventListener("change", e => {
     // pictures or the target changed since. Before anything is signed the
     // hub is asked whether the earlier one landed. If it did, the writer
     // is told and nothing is sent: this press was not for a second post.
-    if (parked && (parked.author !== b64(me.pub) || parked.key !== JSON.stringify(body))) {
-      if (parked.author === b64(me.pub)) {
+    if (parked && (parked.author !== b64(who.pub) || parked.key !== JSON.stringify(body))) {
+      if (parked.author === b64(who.pub)) {
         let was;
         try { was = (await getJSON("/v1/post/" + parked.id)).r; } catch (e) { throw new Error(T("lost")); }
         if (was.ok) {
@@ -2543,11 +2571,12 @@ document.addEventListener("change", e => {
       }
       parked = null; // it never landed, or it is another key's
     }
-    const id = await sendOp("post.create", body, say, restage);
+    mine(who); // a draft sent again, or the question above, took a while
+    const id = await sendOp("post.create", body, say, restage, who);
     text.value = "";
     picked.clear();
     if (target && target.id === to) { target = null; showTarget(); }
-    if (verdict.cooldown) until = Date.now() + verdict.cooldown * 1000;
+    if (me === who && verdict && verdict.cooldown) until = Date.now() + verdict.cooldown * 1000;
     // a live page brings it in (a reply is landed on); a static one loads again, a thread at the new reply
     if (!window.hubRefresh) {
       if (!replyTo) { location.reload(); return false; }
@@ -2561,6 +2590,7 @@ document.addEventListener("change", e => {
   }
   send.addEventListener("click", async () => {
     if ((!text.value.trim() && !atts.length) || atts.some(a => !a.cid) || busy || !me || (target && target.gone)) return;
+    const who = me; // the post is this account's (mine)
     busy = true;
     render();
     showAtts();
@@ -2570,7 +2600,7 @@ document.addEventListener("change", e => {
         if (atts.some(stale)) { tell(T("uploading")); await restage(false); }
         embeds = atts.map(a => ({ cid: a.cid, mime: a.mime, filename: a.name }));
       }
-      const stays = await post(embeds, tell, embeds ? () => restage(true) : null);
+      const stays = await post(embeds, tell, embeds ? () => restage(true) : null, who);
       if (stays) clearAtts();
     } catch (e) {
       flash = e.message;
@@ -2752,6 +2782,7 @@ document.addEventListener("change", e => {
     pFile.value = "";
     if (!f || !me || busy) return;
     if (f.size > MAX_PICTURE) { pSay(T("pic.max"), true); return; }
+    const who = me; // the picture is this account's (mine)
     busy = true;
     lock(true);
     render();
@@ -2760,10 +2791,11 @@ document.addEventListener("change", e => {
       const ts = String(Date.now());
       const digest = await sha256hex(body);
       pSay(T("waiting"));
-      const sig = await signed(enc.encode(UPLOAD + ts + "\n" + digest));
+      const sig = await signed(enc.encode(UPLOAD + ts + "\n" + digest), who);
       pSay(T("uploading"));
       const { r, out } = await getJSON("/v1/avatar", { method: "POST", body,
-        headers: { "Content-Type": f.type || "application/octet-stream", "X-Hub-Author": b64(me.pub), "X-Hub-Ts": ts, "X-Hub-Sig": b64(sig) } });
+        headers: { "Content-Type": f.type || "application/octet-stream", "X-Hub-Author": b64(who.pub), "X-Hub-Ts": ts, "X-Hub-Sig": b64(sig) } });
+      if (me !== who) throw new Error(""); // the picture it answers with was for that account's Save, not this window's
       if (!r.ok) {
         throw new Error(r.status === 413 ? T("pic.max")
           : r.status === 503 ? T("pic.store")
@@ -3357,6 +3389,7 @@ document.addEventListener("change", e => {
     });
     hit(sendB, async () => {
       if (sending || busy || !rec.ops.length || !me) return;
+      const who = me; // the post is this account's (mine)
       // what would stop the post is said before the wallet is asked for the file
       const why = held();
       if (why) { await ask(T("draw.fail"), why); fit(); return; }
@@ -3375,7 +3408,7 @@ document.addEventListener("change", e => {
         }
         stays = await post([{ cid: d.cid, mime: "image/png", filename: "drawing.png", width: w, height: h }],
           t => say(t === T("waiting") ? T("draw.wait.post") : t),
-          async () => { await stage(d.body); d.at = Date.now(); });
+          async () => { await stage(d.body); d.at = Date.now(); }, who);
         drawing = null;
       } catch (e) {
         failed = e.message || held() || line(0);
@@ -3384,6 +3417,7 @@ document.addEventListener("change", e => {
       render();
       if (!stays) return; // the page is loading again, to show the post
       if (failed === null) { shut(); return; }
+      if (!me) return; // Sign Out was pressed meanwhile: the pad went with the wallet
       show();
       await ask(T("draw.fail"), failed);
       fit();

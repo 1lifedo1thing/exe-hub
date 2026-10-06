@@ -954,7 +954,7 @@ func TestWebAttach(t *testing.T) {
 		for _, has := range []string{`<div class="atts"></div><input type="file" class="att-file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>`,
 			`<template class="att-tpl"><div class="row att-row">`, `getJSON("/v1/draft"`, `out.code === "no_pin" && again`, `"att.busy"`,
 			// a post left unanswered is held: sent again as it was, asked after when it was changed
-			`let parked = null;`, `if (resend) sent = parked.sent;`, `if (resend) return sendOp(type, body, say, restage);`,
+			`let parked = null;`, `if (resend) sent = parked.sent;`, `if (resend) return sendOp(type, body, say, restage, who);`,
 			`was = (await getJSON("/v1/post/" + parked.id)).r;`, `"lost"`, `"earlier"`} {
 			if !strings.Contains(body, has) {
 				t.Errorf("%s: the page lacks %s", path, has)
@@ -984,7 +984,7 @@ func TestWebDrawPad(t *testing.T) {
 		if !strings.Contains(body, want) || !strings.Contains(body, end) {
 			t.Errorf("%s: Draw… is not left of %s", path, words[1])
 		}
-		for _, js := range []string{`const DRAW_KEY = "exe-sketch";`, `async function drawingFile(rec)`, `d.cid = (await stage(d.body)).cid;`, `async function post(embeds, say, restage)`, `"draw.wait.post"`} {
+		for _, js := range []string{`const DRAW_KEY = "exe-sketch";`, `async function drawingFile(rec)`, `d.cid = (await stage(d.body)).cid;`, `async function post(embeds, say, restage, who = me)`, `"draw.wait.post"`} {
 			if !strings.Contains(body, js) {
 				t.Errorf("%s: the page lacks %s", path, js)
 			}
@@ -1338,6 +1338,36 @@ func TestWebPush(t *testing.T) {
 	}
 	if n, _ := s.St.PushCount(); n != 0 {
 		t.Errorf("still subscribed: %d", n)
+	}
+}
+
+// TestWebSendKeepsItsAccount: a send is the account's that pressed the
+// button — the script holds who it began as and asks again before the
+// wallet is asked and before what it signed is sent, so a wallet that
+// turned to another account meanwhile is never asked to sign an envelope
+// naming the first (the walk itself, with /v1/seq held, is
+// ~/tools/playwright/exe-hub-wallet/wallet-switch-e2e.js).
+func TestWebSendKeepsItsAccount(t *testing.T) {
+	s := testServer(t, &config.Config{Gate: config.Gate{Mode: "open"}})
+	_, home := get(t, s.Handler(), "/")
+	for _, want := range []string{
+		`if (me === who) return;`,
+		`async function signed(msg, who = me) {`, `sig = await who.sign(msg);`,
+		`async function sendOp(type, body, say = tell, restage = null, who = me) {`, `const author = b64(who.pub);`,
+		`mine(who);`, `const sig = await signed(msg, who);`, `mine(who, true);`,
+		`await sendOp("post.create", body, say, restage, who);`,
+		`"X-Hub-Author": b64(who.pub)`,
+		`Your wallet changed to another account, shown above, while it was signing.`,
+	} {
+		if !strings.Contains(home, want) {
+			t.Errorf("home lacks %q", want)
+		}
+	}
+	// nothing signs as whoever happens to be signed in when its turn comes
+	for _, not := range []string{`await me.sign(`, `signed(msg);`, `"X-Hub-Author": b64(me.pub)`} {
+		if strings.Contains(home, not) {
+			t.Errorf("home still carries %q", not)
+		}
 	}
 }
 
