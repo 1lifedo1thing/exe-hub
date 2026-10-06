@@ -1106,9 +1106,24 @@ hub that carries the post.
   post: below the threshold, banned or unavailable disables Post (and
   the dialog's Edit) with a line saying why, and a cooldown counts down. There is no
   session: the page remembers the wallet's name and address in
-  localStorage, nothing secret, and asks that wallet again silently on
-  the next visit; a head script classes `<html>` (`js`, `wallet`)
+  localStorage, nothing secret; a head script classes `<html>` (`js`, `wallet`)
   before layout so the window has its final shape and never jumps.
+  **The next visit asks the wallet nothing (2026-10-05)** until there
+  is something to sign. It used to connect silently on every page,
+  and Livid saw Glow in Safari put up its connect prompt now and then
+  on pages opened only to read: `silent` (`onlyIfTrusted` for an
+  injected wallet) is a hint, and a wallet may prompt anyway. The
+  remembered address is the account — the gate is checked, the name
+  and Delete buttons drawn from it, the address decoded to its key —
+  so the window is signed in with no call to the wallet at all; the
+  wallet must only still be in the browser under its remembered name.
+  The first Post, Save or Delete asks it: silently, then aloud if
+  that brings nothing, a press being when a prompt is looked for. A
+  wallet that answers with another account signs nothing: the window
+  turns to that account and says so, and the next press is that
+  account's. A Wallet Standard `change` to no accounts signs the page
+  out only from a wallet that handed over its account on this visit;
+  a change to another account turns the window to it with no connect.
   On a phone (a coarse pointer) with no Solana wallet there is no Post
   window at all (2026-09-14): the script classes `<html>` `solana` the
   moment a wallet announces itself (or `window.solana` is there), and

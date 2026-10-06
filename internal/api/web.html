@@ -1774,8 +1774,9 @@ document.addEventListener("change", e => {
 // own key signs each message — "exe-hub:v1\n" and the envelope, one
 // popup a post — and the gate checks that same address. There is no
 // session and no cookie; the page remembers which wallet signed in
-// (its name and address, nothing secret) and asks it again, silently,
-// on the next visit. Wallets are found through the Wallet Standard, with
+// (its name and address, nothing secret) and on the next visit is signed
+// in as that address, the wallet asked again only at the next thing to
+// sign. Wallets are found through the Wallet Standard, with
 // the older injected window.solana as a fallback, and the page only ever
 // asks for a message signature, never a transaction.
 (() => {
@@ -1877,7 +1878,8 @@ document.addEventListener("change", e => {
   // wallets announce themselves as the page starts; give them a moment
   const found = new Promise(res => setTimeout(() => res(), 300)).then(() => wallets.length ? wallets : [legacy()].filter(Boolean));
 
-  // connect → { wallet, name, address, pub, sign(message bytes) → signature bytes }
+  // connect → { wallet, name, address, pub, sign(message bytes) → signature bytes, live }
+  // live: the wallet itself handed this account over on this visit
   const solanaAccount = accounts => (accounts || []).find(a => (a.chains || []).some(c => c.startsWith("solana:"))) || (accounts || [])[0];
   async function connect(w, silent) {
     if (w.legacy) {
@@ -1885,18 +1887,54 @@ document.addEventListener("change", e => {
       const r = await p.connect(silent ? { onlyIfTrusted: true } : undefined);
       const pk = (r && r.publicKey) || p.publicKey;
       if (!pk) throw new Error(T("noaccount"));
-      return { wallet: w, name: w.name, address: pk.toBase58(), pub: new Uint8Array(pk.toBytes()),
+      return { wallet: w, name: w.name, address: pk.toBase58(), pub: new Uint8Array(pk.toBytes()), live: true,
         sign: async m => { const r = await p.signMessage(m, "utf8"); return new Uint8Array(r.signature || r); } };
     }
     const { accounts } = await w.features["standard:connect"].connect(silent ? { silent: true } : undefined);
     const a = solanaAccount(accounts);
     if (!a) throw new Error(T("noaccount"));
-    return { wallet: w, name: w.name, address: a.address, pub: new Uint8Array(a.publicKey),
-      sign: async m => {
-        const [out] = await w.features["solana:signMessage"].signMessage({ account: a, message: m });
-        if (out.signedMessage && !same(out.signedMessage, m)) throw new Error("changed");
-        return new Uint8Array(out.signature);
+    return bind(w, a);
+  }
+  const bind = (w, a) => ({ wallet: w, name: w.name, address: a.address, pub: new Uint8Array(a.publicKey), live: true,
+    sign: async m => {
+      const [out] = await w.features["solana:signMessage"].signMessage({ account: a, message: m });
+      if (out.signedMessage && !same(out.signedMessage, m)) throw new Error("changed");
+      return new Uint8Array(out.signature);
+    } });
+  // A wallet that signed in on an earlier visit is asked nothing while
+  // the pages are read (Livid, 2026-10-05: Glow in Safari put up its
+  // connect prompt now and then on a page opened only to read — a silent
+  // connect is a hint, and a wallet may still prompt). The address the
+  // page remembers is the account: the gate is checked and the name
+  // drawn from it with no wallet at all. The wallet is first asked at the
+  // first thing to sign — silently, then aloud if that brings nothing, a
+  // press being when a prompt is looked for — and a wallet that answers
+  // with another account signs nothing: the window turns to that account
+  // and says so, and the next press is that account's.
+  const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  function unb58(s) {
+    let n = 0n;
+    for (const c of s) { const i = B58.indexOf(c); if (i < 0) return null; n = n * 58n + BigInt(i); }
+    const out = [];
+    for (; n > 0n; n >>= 8n) out.unshift(Number(n & 255n));
+    for (const c of s) { if (c !== "1") break; out.unshift(0); }
+    return new Uint8Array(out);
+  }
+  function resume(w, saved) {
+    const pub = typeof saved.address === "string" && unb58(saved.address);
+    if (!pub || pub.length !== 32) return null;
+    let live = null;
+    const m = { wallet: w, name: w.name, address: saved.address, pub, live: false,
+      sign: async msg => {
+        if (!live) {
+          const got = await connect(w, true).catch(() => null) || await connect(w, false);
+          if (got.address !== m.address) throw Object.assign(new Error("switched"), { account: got });
+          live = got;
+          m.live = true;
+        }
+        return live.sign(msg);
       } };
+    return m;
   }
 
   // ---- state ----
@@ -2005,15 +2043,22 @@ document.addEventListener("change", e => {
     try { adopt(await load()); } catch (e) { if (me) tell(e.message); }
   }
 
-  async function start(w, silent) {
+  // Sign in with Solana, pressed
+  async function start(w) {
+    let got;
     try {
-      me = await connect(w, silent);
+      got = await connect(w, false);
     } catch (e) {
       me = null;
       signedOut();
-      if (!silent) note.textContent = declined(e) ? T("declined") : T("noconnect", { err: e.message || e });
+      note.textContent = declined(e) ? T("declined") : T("noconnect", { err: e.message || e });
       return;
     }
+    await signedIn(got);
+  }
+  async function signedIn(m) {
+    me = m;
+    const w = me.wallet;
     // the same wallet as last time keeps its remembered id, so its own
     // posts wear their Delete buttons from the first paint; another
     // account's do not — the buttons stand down until the gate names it
@@ -2047,8 +2092,9 @@ document.addEventListener("change", e => {
     ev.on("change", ch => {
       if (!me || me.wallet !== w || !ch || !ch.accounts) return;
       const a = solanaAccount(ch.accounts);
-      if (!a) { me = null; signedOut(); }
-      else if (a.address !== me.address) start(w, true);
+      // a wallet not yet asked on this visit has nothing to take back
+      if (!a) { if (me.live) { me = null; signedOut(); } }
+      else if (a.address !== me.address) signedIn(bind(w, a));
     });
   }
 
@@ -2057,6 +2103,7 @@ document.addEventListener("change", e => {
     try {
       return await me.sign(msg);
     } catch (e) {
+      if (e.account) { signedIn(e.account); throw new Error(T("switched")); } // a remembered wallet came back on another account
       throw new Error(e.message === "changed" ? T("changed") : declined(e) ? T("youdeclined") : T("nosign", { err: e.message || e }));
     }
   }
@@ -2143,7 +2190,7 @@ document.addEventListener("change", e => {
   // ---- the controls ----
   signin.addEventListener("click", async () => {
     const ws = await found;
-    if (ws.length === 1) return start(ws[0], false);
+    if (ws.length === 1) return start(ws[0]);
     if (!ws.length) return;
     const label = Object.assign(document.createElement("span"), { className: "grow", textContent: T("choose.wallet") });
     picker.replaceChildren(label, ...ws.map(w => {
@@ -2152,7 +2199,7 @@ document.addEventListener("change", e => {
       b.className = "btn wbtn";
       if (w.icon) { const i = document.createElement("img"); i.src = w.icon; i.alt = ""; b.append(i); }
       b.append(w.name);
-      b.addEventListener("click", () => { picker.hidden = true; pickOff.hidden = false; start(w, false); });
+      b.addEventListener("click", () => { picker.hidden = true; pickOff.hidden = false; start(w); });
       return b;
     }), Object.assign(document.createElement("button"), { type: "button", className: "btn", textContent: T("cancel"),
       onclick: () => { picker.hidden = true; pickOff.hidden = false; } }));
@@ -3321,8 +3368,8 @@ document.addEventListener("change", e => {
       signin.disabled = true;
       onWallet = () => { note.textContent = noteText; signin.disabled = false; };
     }
-    const w = saved && ws.find(w => w.name === saved.name);
-    if (w) start(w, true);
+    const w = saved && ws.find(w => w.name === saved.name), m = w && resume(w, saved);
+    if (m) signedIn(m); // nothing asked of the wallet until something is signed
     else if (saved) signedOut();
   });
 })();
