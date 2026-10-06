@@ -184,3 +184,39 @@ func TestWebRepliesFrameHant(t *testing.T) {
 		has(p+" for zh-TW", body, `<html lang="zh-Hans">`)
 	}
 }
+
+// TestWebRepliesFramePaperWeight: in the paper look a text's weight is
+// its own, by its language, as its face is. An English reader's frame is
+// Regular, and the Chinese or Japanese original in it — one with no
+// English yet, or one shown again over its translation — is still set
+// Medium in its own face, where it used to inherit the frame's 400.
+func TestWebRepliesFramePaperWeight(t *testing.T) {
+	s := testServer(t, &config.Config{Gate: config.Gate{Mode: "open"}})
+	site, sitePriv, _ := ed25519.GenerateKey(nil)
+	ann, annPriv, _ := ed25519.GenerateKey(nil)
+	root := ingest(t, s, sitePriv, site, 1, "post.create", map[string]any{"text": "A post in English"})
+	zh := ingest(t, s, annPriv, ann, 1, "post.create", map[string]any{"text": "纸也有脾气。", "reply_to": root})
+	ja := ingest(t, s, annPriv, ann, 2, "post.create", map[string]any{"text": "美しい文章です。", "reply_to": root})
+	s.St.SetLang(zh, "zh-Hans", "m", true)
+	s.St.SetLang(ja, "ja", "m", true)
+	if err := s.St.SetTranslation(ja, "en", "A beautiful piece.", "m", true); err != nil {
+		t.Fatal(err)
+	}
+	_, body := get(t, s.Handler(), "/p/"+root+"/replies?look=paper&lang=en")
+	for _, want := range []string{
+		`<html lang="en" class="framed paper">`,
+		`.paper:lang(en) { --serif: "Noto Serif", "Noto Serif SC", Georgia, serif; --weight: 400; }`,
+		`.paper .text:lang(en) { font-family: "Noto Serif", var(--serif); font-weight: 400; }`,
+		`.paper .text:lang(ja) { font-family: "Noto Serif JP", var(--serif); font-weight: 500; }`,
+		`.paper .text:lang(zh-Hans) { font-family: "Noto Serif SC", var(--serif); font-weight: 500; }`,
+		`.paper .text:lang(zh-Hant) { font-family: "Noto Serif TC", var(--serif); font-weight: 500; }`,
+		// the rows those rules meet: an original with no English, and one behind its translation
+		`<div class="text" lang="zh-Hans">纸也有脾气。</div>`,
+		`<div class="text" lang="en">A beautiful piece.</div><div class="text" lang="ja" hidden>美しい文章です。</div>`,
+		"family=Noto+Serif+SC:wght", "family=Noto+Serif+JP:wght",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("an English paper frame lacks %q", want)
+		}
+	}
+}

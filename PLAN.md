@@ -2939,7 +2939,12 @@ post) and the replies frame.
     face, whose horizontals are 33/1000 em at every weight and drew
     grey at Regular; Regular in Latin letters; `-webkit-font-smoothing:
     antialiased` only on the dark sheet, since by day it thinned dark
-    type on a Mac further), Paper's
+    type on a Mac further; and the weight is each text's own, by its
+    language, as its face is — `.paper .text:lang(ja|zh-Hans|zh-Hant)`
+    say 500 beside English's 400, since `--weight` is the frame's and
+    an English reader's frame is 400: a Chinese original shown there,
+    one with no English yet or one shown over its translation, had
+    inherited Regular; Codex on Spark's find, Livid: "Improve."), Paper's
     ink colours, hairlines where Platinum draws black lines and grey
     fields, plain hairline buttons, and the empty line exactly 56px, the
     height Paper holds open for it. The look rides the pager's links;

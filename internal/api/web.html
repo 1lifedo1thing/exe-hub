@@ -806,7 +806,11 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
    and so is the text's weight: Medium in a CJK face, whose horizontal
    strokes stay 33/1000 em at every weight and draw grey at Regular,
    Regular in Latin letters; the Mac's own smoothing by day, grey
-   smoothing only on the night sheet. */
+   smoothing only on the night sheet. The weight is each text's own, by
+   its language, as its face is: --weight is the frame's (its labels,
+   and a text no language is named for), and a Chinese or Japanese
+   original an English reader shows is Medium in that Regular frame, as
+   an English one is Regular in a Chinese frame. */
 .paper {
   --ground: #e3e2de; --ink: #22211f; --quiet: #6f6c66; --faint: #9a968f;
   --rule: rgba(34, 33, 31, .16); --line: rgba(34, 33, 31, .34); --wash: rgba(34, 33, 31, .05);
@@ -846,9 +850,9 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 .paper .mono { font-family: var(--mono); font-size: 11px; }
 .paper .text { margin-top: 4px; }
 .paper .text:lang(en) { font-family: "Noto Serif", var(--serif); font-weight: 400; }
-.paper .text:lang(ja) { font-family: "Noto Serif JP", var(--serif); }
-.paper .text:lang(zh-Hans) { font-family: "Noto Serif SC", var(--serif); }
-.paper .text:lang(zh-Hant) { font-family: "Noto Serif TC", var(--serif); }
+.paper .text:lang(ja) { font-family: "Noto Serif JP", var(--serif); font-weight: 500; }
+.paper .text:lang(zh-Hans) { font-family: "Noto Serif SC", var(--serif); font-weight: 500; }
+.paper .text:lang(zh-Hant) { font-family: "Noto Serif TC", var(--serif); font-weight: 500; }
 .paper .text a { text-decoration-thickness: 1px; text-underline-offset: .22em; text-decoration-color: var(--line); }
 .paper .text h1 { font-size: 18px; } .paper .text h2 { font-size: 17px; } .paper .text h3 { font-size: 16px; }
 .paper .text li::before { color: var(--faint); }
