@@ -315,6 +315,19 @@ html[data-saved] .saved { display: flex; }
 .compose .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .compose .grow { flex: 1 1 12em; min-width: 0; font-size: 11px; color: #333; }
 .compose .who { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the address check being made again, the hub out of reach (offline,
+   or the edge's 502 while it restarts): an 8px disc of pixels in the
+   disabled grey on the status line, in place of words, fading to a
+   quarter and back each 1.2 s; still under reduced motion. Why is its
+   tooltip. */
+/* the disc's box is the line's height, the disc centred in it: on the
+   row's middle, where the buttons' words are, and the status line as
+   tall as with words in it (a phone gives it a line of its own) */
+.compose .pulse { display: inline-flex; align-items: center; vertical-align: top; height: 1lh; animation: hub-pulse .6s ease-in-out infinite alternate; }
+.compose .pulse svg { display: block; width: 8px; height: 8px; shape-rendering: crispEdges; fill: #999; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) { .compose .pulse svg { shape-rendering: geometricPrecision; } }
+@keyframes hub-pulse { from { opacity: 1; } to { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .compose .pulse { animation: none; } }
 /* who is posting: the avatar 5px before the name, at the row's 20px —
    the buttons' height — framed like the feed's and, like a post's,
    a link to the author's page, when the profile has one; it arrives with the name and the row stays 20px either way. On a
@@ -2117,7 +2130,9 @@ document.addEventListener("change", e => {
     profileBtn.disabled = busy;
     drawBtn.disabled = busy || !can;
     attBtn.disabled = busy || !can || atts.length >= ATT_MAX;
-    status.textContent = over > 0 ? T("over", { n: over, max: MAX_TEXT }) : flash || line(left);
+    const said = over > 0 ? T("over", { n: over, max: MAX_TEXT }) : flash || (retry ? "" : line(left));
+    if (said) { status.textContent = said; status.removeAttribute("title"); }
+    else { if (status.firstChild !== pulse) status.replaceChildren(pulse); status.title = retry; pulse.setAttribute("aria-label", retry); }
     if (left > 0 && !flash) timer = setTimeout(render, 1000);
   }
   // why a post cannot go as things stand, in the status line's words; ""
@@ -2139,7 +2154,9 @@ document.addEventListener("change", e => {
   async function load() {
     const author = b64(me.pub);
     const { r, out } = await getJSON("/v1/gate?author=" + encodeURIComponent(author));
-    if (!r.ok) throw new Error(T("check.fail", { err: out.error || T("http", { code: r.status }) }));
+    // a 502–504 with no word from the hub is the edge's, while the hub
+    // restarts: the hub will be back, so the check is made again
+    if (!r.ok) throw Object.assign(new Error(T("check.fail", { err: out.error || T("http", { code: r.status }) })), { again: r.status >= 502 && r.status <= 504 && !out.error });
     const p = await getJSON("/v1/profile/" + out.profile);
     return { author, v: out, profile: p.r.ok ? p.out : null };
   }
@@ -2187,12 +2204,16 @@ document.addEventListener("change", e => {
     render();
     return true;
   }
-  // A check that could not reach the hub (offline, PLAN.md, Offline)
-  // leaves nothing to post with and says why, and is made again when the
-  // browser says it is back online, when the page is shown again, and
-  // every fifteen seconds meanwhile; the line it left goes with the
-  // verdict it brings.
-  let away = 0, checking = false;
+  // A check that could not reach the hub — offline (PLAN.md, Offline),
+  // or the edge's 502 while the hub restarts — is no error to read: it
+  // leaves nothing to post with, and the status line pulses a grey dot
+  // instead of words (why, on hover), through every check made again
+  // until one lands: when the browser says it is back online, when the
+  // page is shown again, and 2 s, 4 s, 8 s, then every 15 s meanwhile.
+  let away = 0, checking = false, retry = "", backoff = 0;
+  const pulse = Object.assign(document.createElement("span"), { className: "pulse",
+    innerHTML: '<svg viewBox="0 0 8 8" width="8" height="8" aria-hidden="true"><path d="M2 0h4v1h-4zM1 1h6v1h-6zM0 2h8v4h-8zM1 6h6v1h-6zM2 7h4v1h-4z"/></svg>' });
+  pulse.setAttribute("role", "img");
   async function check() {
     verdict = null;
     clearTimeout(away);
@@ -2200,12 +2221,16 @@ document.addEventListener("change", e => {
     render();
     try {
       const st = await load();
+      retry = ""; backoff = 0;
       if (flash === T("offline")) flash = "";
       adopt(st);
     } catch (e) {
       if (!me) return;
-      tell(e.message);
-      if (e.offline) away = setTimeout(recheck, 15000);
+      if (e.offline || e.again) {
+        retry = e.message;
+        away = setTimeout(recheck, backoff = Math.min(backoff ? backoff * 2 : 2000, 15000));
+        render();
+      } else { retry = ""; tell(e.message); }
     } finally { checking = false; }
   }
   const recheck = () => { if (me && !verdict && !checking && !busy && !document.hidden) check(); };
@@ -2270,7 +2295,7 @@ document.addEventListener("change", e => {
     await check();
   }
   function signedOut() {
-    verdict = null; flash = ""; until = 0;
+    verdict = null; flash = ""; until = 0; retry = ""; backoff = 0; clearTimeout(away);
     if (target) { target = null; showTarget(); } // the Reply links go with the wallet, and so does their aim
     showOwn(""); // and so do the Delete buttons
     disarm();

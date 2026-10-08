@@ -1791,14 +1791,21 @@ and whatever was never seen need the hub.
 - **What needs the hub.** Posting from the Post and Reply windows,
   Delete, Profile…, the event stream, a new search (one already made is
   a kept page), the mention list, Notify: their requests pass the
-  worker by. The Post window says so in the reader's words: a request
-  that never reached the hub reads "Offline: the hub can't be reached.
-  You can read; posting needs the network." rather than the browser's
-  "Failed to fetch"; when the address check failed that way, Post stays
-  disabled and the check is made again when the browser says it is
-  online, when the page is shown, and every fifteen seconds. What was
-  typed stays in the box. A post signed before the line dropped is held
-  as ever ("The hub didn't answer. Send it again").
+  worker by. A press that never reached the hub says so in the reader's
+  words — "Offline: the hub can't be reached. You can read; posting
+  needs the network." — rather than the browser's "Failed to fetch". The
+  address check that could not reach the hub, offline or answered by
+  the edge's 502–504 while the hub restarts, is no error to read (Livid,
+  2026-10-08: "use a pulse gray dot instead of this 'Could not check
+  this address: HTTP 502'"): Post stays disabled and the status line
+  pulses a grey dot in place of words — an 8px disc of pixels in the
+  disabled grey, fading to a quarter and back each 1.2 s, still under
+  reduced motion, the reason its tooltip and its label — through every
+  check made again until one lands: when the browser says it is online,
+  when the page is shown, and 2 s, 4 s, 8 s, then every 15 s. A 5xx
+  that carries the hub's own error is the hub's answer, and reads as
+  before. What was typed stays in the box. A post signed before the line
+  dropped is held as ever ("The hub didn't answer. Send it again").
 - **Every page registers the worker** but the replies frame (until now
   only the Notify bell did), so the first page a reader opens starts
   keeping the hub. Installing, it keeps `/` with its pictures (the
