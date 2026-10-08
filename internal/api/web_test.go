@@ -113,8 +113,8 @@ func TestWebHome(t *testing.T) {
 	}
 	// the hand and the faint grey under the mouse say the body is the way
 	// in; the grey waits for a mouse, so a phone keeps the post as it is
-	if !strings.Contains(body, ".post[data-href] { cursor: pointer; }") || !strings.Contains(body, "@media (hover: hover) { .post[data-href]:hover { background-color: rgba(0, 0, 0, .03); } }") {
-		t.Error("the listed post lacks its hand or its hover grey")
+	if !strings.Contains(body, ".post[data-href] { cursor: pointer; transition: background-color .12s; }") || !strings.Contains(body, "@media (hover: hover) { .post[data-href]:hover { background-color: rgba(0, 0, 0, .03); } }") {
+		t.Error("the listed post lacks its hand, its hover grey or the grey's 0.12 s fade")
 	}
 	if _, zh := get(t, h, "/?lang=zh"); !strings.Contains(zh, ` data-href="/p/`+id+`?lang=zh"`) {
 		t.Error("the listed post's data-href drops the reader's ?lang=")

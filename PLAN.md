@@ -744,7 +744,8 @@ hub that carries the post.
   on a link. The hand says so (`cursor: pointer` on the post, not on
   its players, cards or translate line, where a press does nothing),
   and a faint grey lies under the mouse (`rgba(0,0,0,.03)`, so it
-  reads on white, on a reply's grey and on paper); a finger has no
+  reads on white, on a reply's grey and on paper), coming and going in
+  0.12 s (`transition: background-color .12s`); a finger has no
   mouse, so under `(hover: none)` a phone keeps the post as it is. The
   time and the reply count stay the Tab stops and the links to open in
   a new tab, and without script they are what there is. Asked by Livid

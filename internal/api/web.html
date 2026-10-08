@@ -512,9 +512,9 @@ html[data-saved] .saved { display: flex; }
    body is the way in): the hand says so, except over the players, cards
    and translate line where a press does nothing, and a faint grey lies
    under the mouse — translucent, so it reads on white, on a reply's
-   grey and on paper. A finger has no mouse: a phone keeps the post as
-   it is. */
-.post[data-href] { cursor: pointer; }
+   grey and on paper — and comes and goes in 0.12 s. A finger has no
+   mouse: a phone keeps the post as it is. */
+.post[data-href] { cursor: pointer; transition: background-color .12s; }
 .post[data-href] :is(.embeds, .card, .trl) { cursor: auto; }
 @media (hover: hover) { .post[data-href]:hover { background-color: rgba(0, 0, 0, .03); } }
 /* the reply a foot's latest link lands on (#anchor): the same tint
