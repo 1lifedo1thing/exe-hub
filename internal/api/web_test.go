@@ -71,7 +71,7 @@ func TestWebHome(t *testing.T) {
 	s := testServer(t, &config.Config{Gate: config.Gate{Mode: "open"}})
 	pub, priv, _ := ed25519.GenerateKey(nil)
 	ingest(t, s, priv, pub, 1, "profile.set", map[string]any{"name": "Ann"})
-	ingest(t, s, priv, pub, 2, "post.create", map[string]any{
+	id := ingest(t, s, priv, pub, 2, "post.create", map[string]any{
 		"text": "see https://example.com/a. and <b>bold</b> and `x <i>y</i>` too\nline two"})
 	h := s.Handler()
 
@@ -104,6 +104,15 @@ func TestWebHome(t *testing.T) {
 	}
 	if strings.Contains(body, "<b>bold</b>") {
 		t.Error("post markup reached the page unescaped")
+	}
+	// the post's body is the way into its page: the post carries the
+	// address the page's script follows on a press (PLAN.md, Public pages
+	// — The body is the way in), and the script is on the page
+	if !strings.Contains(body, `data-au="`+identity.Fingerprint(pub)+`" data-href="/p/`+id+`"`) || !strings.Contains(body, `document.addEventListener("click", bodyPress)`) {
+		t.Error("the listed post lacks data-href, or the page the press that follows it")
+	}
+	if _, zh := get(t, h, "/?lang=zh"); !strings.Contains(zh, ` data-href="/p/`+id+`?lang=zh"`) {
+		t.Error("the listed post's data-href drops the reader's ?lang=")
 	}
 	if code, _ := get(t, h, "/nothing"); code != 404 {
 		t.Errorf("GET /nothing = %d, want 404", code)
@@ -303,6 +312,17 @@ func TestWebThreadProfile(t *testing.T) {
 	for _, path := range []string{"/", "/u/" + identity.Fingerprint(pub)} {
 		if _, other := get(t, h, path); strings.Contains(other, `class="rlink"`) || strings.Contains(other, `class="row re-row"`) {
 			t.Errorf("%s carries a Reply link or the reply line", path)
+		}
+	}
+	// the body is the way in only in a list: the feed's and the profile's
+	// posts carry data-href, the thread page's none (PLAN.md, Public pages
+	// — The body is the way in)
+	if strings.Contains(body, "data-href=") {
+		t.Error("a post on the thread page carries data-href")
+	}
+	for _, path := range []string{"/", "/u/" + identity.Fingerprint(pub)} {
+		if _, other := get(t, h, path); !strings.Contains(other, ` data-href="/p/`+root+`"`) {
+			t.Errorf("%s: the root post lacks data-href", path)
 		}
 	}
 	// the JSON keeps the one-level replies and adds the tree with depths

@@ -1469,6 +1469,28 @@ document.addEventListener("click", e => {
   line.firstElementChild.hidden = !line.firstElementChild.hidden;
   [a.textContent, a.dataset.other] = [a.dataset.other, a.textContent];
 });
+// A listed post's body is the way into its page (PLAN.md, Public pages
+// — The body is the way in). In the feed, on a profile and in a search
+// every post carries data-href, and a press on it anywhere that is not
+// a link, a picture, a player or a button opens that page, as its time
+// does; a thread's posts carry none, and a press there is only a press.
+// A drag that selected words is not a press. A middle or a modified
+// press opens the page in a new tab, as it would on a link. One
+// listener on the document, so the posts a live page brings in need
+// nothing; without script the time and the reply count are the links
+// they are.
+const bodyPress = e => {
+  if (!(e.target instanceof Element) || e.defaultPrevented) return;
+  const post = e.target.closest(".post[data-href]");
+  if (!post || e.target.closest("a, button, img, video, audio, input, textarea, select, label, .embeds, .card, .trl")) return;
+  const sel = getSelection();
+  if (sel && sel.toString()) return;
+  if (e.type === "auxclick" ? e.button !== 1 : e.button) return;
+  if (e.type === "auxclick" || e.metaKey || e.ctrlKey || e.shiftKey) window.open(post.dataset.href, "_blank", "noopener");
+  else location.assign(post.dataset.href);
+};
+document.addEventListener("click", bodyPress);
+document.addEventListener("auxclick", bodyPress);
 // Summarize on a thread's strip (PLAN.md, Thread summaries — the
 // phone): it slides the summary into the feed under the strip and
 // presses in, and slides it up again; a block the live page brings in
@@ -3755,7 +3777,7 @@ document.addEventListener("change", e => {
      see the .del and .foot.own rules. */}}
 {{define "del"}}<button type="button" class="btn del" title="{{T "delete.title"}}">{{T "delete"}}</button>{{end}}
 
-{{define "post"}}<div class="post{{if .ReplyTo}} reply{{end}}{{if gt .Depth 1}} deep{{end}}{{if .Quote}} qhead{{end}}{{if .QuoteRun}} qrun{{end}}" id="{{.ID}}" data-au="{{.Author}}"{{if gt .Depth 1}} style="--d:{{.Depth}}"{{end}}>
+{{define "post"}}<div class="post{{if .ReplyTo}} reply{{end}}{{if gt .Depth 1}} deep{{end}}{{if .Quote}} qhead{{end}}{{if .QuoteRun}} qrun{{end}}" id="{{.ID}}" data-au="{{.Author}}"{{if .Listed}} data-href="/p/{{.ID}}{{.Q}}"{{end}}{{if gt .Depth 1}} style="--d:{{.Depth}}"{{end}}>
   {{with .Quote}}<a class="quote" href="/p/{{.ID}}{{$.Q}}"><b>{{.Name}}</b>{{if .Text}} {{.Text}}{{end}}</a>{{end}}
   <a class="av" href="/u/{{.Author}}{{.Q}}">{{if .Avatar}}<img src="/v1/embed/{{.Avatar}}" alt="">{{else}}<img class="idn" src="/v1/identicon/{{.Author}}.svg" alt="">{{end}}</a>
   <div>

@@ -732,6 +732,20 @@ hub that carries the post.
   root's own arrival returns); `Rebuild` replays the same path. Asked
   by Livid 2026-09-16: follow-ups were buried in their thread,
   invisible from the home feed.
+- **The body is the way in (built 2026-10-08).** In the feed, on a
+  profile and in a search, a press anywhere on a post that is not on a
+  link, a picture, a player or a button opens the post's page, the same
+  page its time has always led to. The post carries the address
+  (`data-href="/p/{id}"`, with the reader's `?lang=`; set by
+  `webListed`, so a thread's posts have none and a press there is only
+  a press), and one listener on the document follows it, so the posts
+  a live page brings in need nothing. A drag that selected words is not
+  a press; a middle or a modified press opens the page in a new tab, as
+  on a link. Nothing is drawn for it: no hover, no hand — the time and
+  the reply count stay the visible links, the Tab stops and the links
+  to open in a new tab, and without script they are what there is.
+  Asked by Livid 2026-10-08 after a visitor found that a post without
+  replies could be entered only through its time.
 - **Profile replies quoted (built 2026-09-16).** On `/u/{id}` a reply
   is the foot of a small card: above it, in quieter grey, the post it
   answers — the author and a line of it (`webQuoted`, a 140-char

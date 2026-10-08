@@ -271,6 +271,10 @@ type webPost struct {
 	InThread   bool
 	ParentName string
 	ParentHref string // "#id" on the same page, else the thread's ?at= for it
+	// in a list — the feed, a profile, a search: the post's body is the
+	// way into its page (data-href, followed by the page's script); a
+	// thread's posts carry none
+	Listed bool
 	// on a profile page: the post this reply answers, quoted as the head
 	// of its card. A run of replies under one parent shares one head —
 	// the later ones carry QuoteRun and attach to the card above.
@@ -1038,6 +1042,16 @@ func webStamp(ms int64) string {
 	return time.UnixMilli(ms).UTC().Format(time.RFC3339)
 }
 
+// webListed marks posts standing in a list — the feed, a profile, a
+// search — whose body is the way into their page (PLAN.md, Public pages
+// — The body is the way in); a thread's posts are not.
+func webListed(posts []webPost) []webPost {
+	for i := range posts {
+		posts[i].Listed = true
+	}
+	return posts
+}
+
 func (s *Server) webPosts(rd webReading, posts []store.FeedPost) []webPost {
 	ids := make([]string, 0, len(posts))
 	for _, p := range posts {
@@ -1590,7 +1604,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	d := &webData{
 		Page: "home", Desc: webDesc, Canonical: true,
 		Image: webBase(r) + "/v1/preview/home.png", ImageW: preview.W, ImageH: preview.H, ImageAlt: r.Host + ", " + webDesc,
-		Posts: s.webPosts(rd, pg.Posts), Prev: pg.Prev, Next: pg.Next, Join: s.webJoinBlock(r), Lang: rd.Lang, Q: rd.Q,
+		Posts: webListed(s.webPosts(rd, pg.Posts)), Prev: pg.Prev, Next: pg.Next, Join: s.webJoinBlock(r), Lang: rd.Lang, Q: rd.Q,
 		Live:    s.Events != nil && q.Get("before") == "" && q.Get("after") == "",
 		Members: members, Count: count,
 	}
@@ -1659,7 +1673,7 @@ func (s *Server) handleSearchPage(w http.ResponseWriter, r *http.Request) {
 		s.webError(w, r, http.StatusInternalServerError, "err.search")
 		return
 	}
-	d.Posts, d.Prev, d.Next, d.Count = s.webPosts(rd, pg.Posts), pg.Prev, pg.Next, count
+	d.Posts, d.Prev, d.Next, d.Count = webListed(s.webPosts(rd, pg.Posts)), pg.Prev, pg.Next, count
 	for i := range d.Posts { // the found words on yellow
 		p := &d.Posts[i]
 		own := markHits(p.HTML, q)
@@ -2000,7 +2014,7 @@ func (s *Server) handleProfilePage(w http.ResponseWriter, r *http.Request) {
 	}
 	posts := pg.Posts
 	pr, err := s.St.Profile(id)
-	d := &webData{Page: "profile", Posts: s.webQuoted(rd, s.webPosts(rd, posts)), Prev: pg.Prev, Next: pg.Next, Lang: rd.Lang, Q: rd.Q}
+	d := &webData{Page: "profile", Posts: webListed(s.webQuoted(rd, s.webPosts(rd, posts))), Prev: pg.Prev, Next: pg.Next, Lang: rd.Lang, Q: rd.Q}
 	switch {
 	case err == nil:
 		d.Profile, d.Count = pr, pr.Posts
