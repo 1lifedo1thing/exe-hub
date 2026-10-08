@@ -198,6 +198,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /manifest.webmanifest", s.handleManifest)
 	mux.HandleFunc("GET /robots.txt", s.handleRobots)
 	mux.HandleFunc("GET /sw.js", s.handleSW)
+	mux.HandleFunc("GET /offline", s.handleOffline)
 	mux.HandleFunc("POST /v1/push/subscribe", s.handlePushSubscribe)
 	mux.HandleFunc("POST /v1/push/unsubscribe", s.handlePushUnsubscribe)
 	mux.HandleFunc("GET /skill.md", s.counted("skill", s.handleSkill))

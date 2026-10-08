@@ -217,6 +217,20 @@ a.mention { text-decoration: none; }
    first post; above it the find strip's rule or the frame's own edge
    already draws the seam, so no line of its own there. */
 .pager.top { border-top: 0; border-bottom: 1px solid #262626; }
+/* a kept copy (PLAN.md, Offline): the service worker shows the page as
+   it was last served when the hub cannot be reached, and marks its
+   <html> (data-saved), so this strip heads the page's window from the
+   first paint — the pager's platinum strip and 11px words, "Offline ·
+   saved" and when, at the frame's top with its rule along its bottom,
+   against the strip or the post below it. Its height is a button's,
+   for Reload, which a page that is not live shows there once the hub
+   answers again; a live page catches up by itself and the strip goes. */
+.saved { display: none; align-items: center; gap: 12px; padding: 8px 12px; min-height: 20px;
+  border-bottom: 1px solid #262626; background: #ddd; font-size: 11px; color: #333;
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.6), inset -1px -1px 0 #aaa; }
+html[data-saved] .saved { display: flex; }
+.saved .sv { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.saved .btn[hidden] { display: none; }
 /* Prev, Next and the thread page's Feed button carry the Hub app's
    arrow: the same 11×9 pixel glyph in currentColor (a text triangle
    is an emoji on an iPhone), 5px from the word — before it on a button
@@ -954,6 +968,7 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 <div class="window feed">
   <div class="titlebar"><span class="tbox"></span><span class="stripe"></span><span class="title">{{.Host}}</span><span class="stripe"></span></div>
   <div class="frame"{{if .Live}} data-live="feed"{{end}}>
+    {{template "saved"}}
     {{template "find" .}}
     {{if or .Prev .Next}}<div class="pager top">{{template "pager" .}}</div>{{end}}
     {{if .Posts}}{{range .Posts}}{{template "post" .}}{{end}}{{else}}<div class="pad">{{T "nothing"}}</div>{{end}}
@@ -970,6 +985,7 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 <div class="window">
   <div class="titlebar"><a class="tbox" href="/{{.Q}}" title="{{T "back"}}" aria-label="{{T "back"}}"></a><span class="stripe"></span><span class="title"><a href="/{{.Q}}">{{.Host}}</a></span><span class="stripe"></span></div>
   <div class="frame"{{if .Live}} data-live="thread" data-root="{{.Root}}"{{end}}>
+    {{template "saved"}}
     <div class="pager top"><a class="btn prev back" href="/{{.Q}}">{{template "arrow"}}<span>{{T "feed"}}</span></a>{{if .Summary}}<button type="button" class="btn spark" id="spark" aria-pressed="false" aria-controls="side" title="{{T "summary"}}">{{template "spark"}}<span>{{T "summarize"}}</span></button>{{end}}{{template "lang" .}}</div>
     {{with .Summary}}{{template "sumfeed" .}}{{end}}
     {{template "post" .Post}}
@@ -991,6 +1007,7 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 <div class="window">
   <div class="titlebar"><a class="tbox" href="/{{.Q}}" title="{{T "back"}}" aria-label="{{T "back"}}"></a><span class="stripe"></span><span class="title">{{T "search"}}</span><span class="stripe"></span></div>
   <div class="frame">
+    {{template "saved"}}
     {{template "find" .}}
     {{if or .Prev .Next}}<div class="pager top">{{template "pager" .}}</div>{{end}}
     {{if .Posts}}{{range .Posts}}{{template "post" .}}{{end}}{{else if .Query}}<div class="pad">{{T "nomatch"}}</div>{{else}}<div class="pad">{{T "search.hint"}}</div>{{end}}
@@ -1001,6 +1018,7 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 <div class="window">
   <div class="titlebar"><a class="tbox" href="/{{.Q}}" title="{{T "back"}}" aria-label="{{T "back"}}"></a><span class="stripe"></span><span class="title"><a href="/{{.Q}}">{{.Host}}</a></span><span class="stripe"></span></div>
   <div class="frame">
+    {{template "saved"}}
     <div class="profile">
       <span class="av">{{if .Profile.Avatar}}<img src="/v1/embed/{{.Profile.Avatar}}" alt="">{{else}}<img class="idn" src="/v1/identicon/{{.Profile.ID}}.svg" alt="">{{end}}</span>
       <div>
@@ -1111,6 +1129,9 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
     // push it down (one that anchors the scroll itself leaves nothing to add)
     const pin = scrollY > 0 && next.find(n => n.parentNode === feed && n.getBoundingClientRect().bottom > 0);
     const at = pin && pin.getBoundingClientRect().top;
+    // a kept copy (PLAN.md, Offline) is the hub's page again: its Offline
+    // strip goes, the place held with the rest
+    delete document.documentElement.dataset.saved;
     for (const n of [...feed.children]) if (!next.includes(n)) n.remove();
     next.forEach((n, i) => { if (feed.children[i] !== n) feed.insertBefore(n, feed.children[i] || null); });
     // the new posts' times, and a kept post whose day ended since
@@ -1173,7 +1194,9 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
   // said nothing for 60 s is dropped and opened again. Both checks also
   // run when the tab is shown, the network is back or the page comes
   // back from the back-forward cache; a reopen fetches, as any reconnect
-  // does, since the line was down (the Hub app's rule).
+  // does, since the line was down (the Hub app's rule). A page the
+  // service worker showed as it was kept (PLAN.md, Offline) starts down,
+  // so the stream's first open fetches it as it is now.
   // The heartbeat carries the strip's counts — members, posts and who was
   // here in the last five minutes — and they are written in place: a
   // visitor coming or going is no event on the bus, so "online" would
@@ -1183,7 +1206,7 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
     let d = {}; try { d = JSON.parse(data); } catch (x) { return; }
     for (const n of document.querySelectorAll("[data-n]")) if (typeof d[n.dataset.n] === "number") n.textContent = d[n.dataset.n];
   };
-  let es, down = false, back = 0, again, heard = 0;
+  let es, down = !!document.documentElement.dataset.saved, back = 0, again, heard = 0;
   const connect = () => {
     clearTimeout(again);
     if (es) es.close();
@@ -1241,6 +1264,86 @@ function localTimes(root) {
 localTimes(document);
 </script>
 <script>
+// A kept copy (PLAN.md, Offline). The service worker showed this page as
+// it was last served, the hub being out of reach, and wrote onto <html>
+// when that was: the Offline strip heading the window says so, the time
+// on the reader's clock. A live page (the feed's first page, a thread)
+// catches up by itself once the hub answers, and the strip goes. Any
+// other stays as it was kept, the reader perhaps halfway down it: once
+// the hub answers — asked every ten seconds while the page is in view,
+// and whenever the browser says it is back online — the strip says so
+// and offers Reload.
+(() => {
+  const saved = document.documentElement.dataset.saved, strip = document.querySelector(".saved");
+  if (!saved || !strip) return;
+  const say = k => {
+    const [a, b] = T(k).split("{time}");
+    strip.querySelector(".sv").replaceChildren(a, Object.assign(document.createElement("time"), { dateTime: new Date(+saved).toISOString() }), b || "");
+    localTimes(strip);
+  };
+  say("saved.off");
+  if (window.hubRefresh) return; // the live script's: this page catches up by itself
+  const re = strip.querySelector(".sv-re");
+  re.addEventListener("click", () => location.reload());
+  let t, back = false;
+  const ask = () => {
+    clearTimeout(t);
+    if (back || document.hidden) return;
+    fetch("/v1/hub", { cache: "no-store" }).then(r => {
+      if (!r.ok) throw new Error(r.status);
+      back = true;
+      say("saved.on");
+      re.hidden = false;
+    }).catch(() => { t = setTimeout(ask, 10000); });
+  };
+  addEventListener("online", ask);
+  document.addEventListener("visibilitychange", ask);
+  ask();
+})();
+</script>
+{{if eq .Page "offline"}}<script>
+// The offline page (PLAN.md, Offline): the service worker shows it at the
+// address of a page it never kept while the hub cannot be reached. It
+// asks the hub every five seconds while it is in view, and whenever the
+// browser says it is back online, and the moment the hub answers loads
+// the page it stands for. A page that keeps failing while the hub
+// answers (a gateway timing out on it alone) would load again and again,
+// so each load in a row waits twice as long, to a minute. At its own
+// address it is only itself, and asks nothing.
+(() => {
+  if (location.pathname === "/offline") return;
+  const KEY = "exe-hub-offline";
+  let tries = 0;
+  try { const m = JSON.parse(sessionStorage.getItem(KEY) || "null"); if (m && m.url === location.href && Date.now() - m.at < 120000) tries = m.n; } catch (e) {}
+  let t;
+  const ask = () => {
+    clearTimeout(t);
+    if (document.hidden) return;
+    fetch("/v1/hub", { cache: "no-store" }).then(r => {
+      if (!r.ok) throw new Error(r.status);
+      try { sessionStorage.setItem(KEY, JSON.stringify({ url: location.href, at: Date.now(), n: tries + 1 })); } catch (e) {}
+      location.reload();
+    }).catch(() => { t = setTimeout(ask, 5000); });
+  };
+  addEventListener("online", ask);
+  document.addEventListener("visibilitychange", ask);
+  t = setTimeout(ask, tries ? Math.min(60000, 2500 * 2 ** tries) : 0);
+})();
+</script>
+{{end}}{{if ne .Page "frame"}}<script>
+// The service worker (PLAN.md, Offline): every page registers it, so the
+// first page a reader opens starts keeping the hub for them, and that
+// page, loaded before the worker could keep it, asks to be kept once the
+// worker takes over. A browser without one, or a page in no secure
+// context (the host hub on its plain http address), has the hub as it
+// always was.
+if ("serviceWorker" in navigator) {
+  const sw = navigator.serviceWorker;
+  if (!sw.controller) sw.addEventListener("controllerchange", () => { if (sw.controller) sw.controller.postMessage({ keep: location.href }); }, { once: true });
+  sw.register("/sw.js").catch(() => {});
+}
+</script>
+{{end}}<script>
 // A drawing (PLAN.md, Drawings): an animated PNG that replays the pad
 // once as it loads, made by Draw… here and in the exe Hub app, whose
 // feed shows it the same way (sysapps/hub index.html, "a drawing":
@@ -1862,8 +1965,13 @@ document.addEventListener("change", e => {
     }
     return sha256js(data);
   };
+  // a request that never reached the hub (PLAN.md, Offline) says so in
+  // the reader's words, not the browser's ("Failed to fetch"), and is
+  // marked, so the address check knows to ask again once it can
   const getJSON = async (path, opts) => {
-    const r = await fetch(path, Object.assign({ cache: "no-store" }, opts));
+    let r;
+    try { r = await fetch(path, Object.assign({ cache: "no-store" }, opts)); }
+    catch (e) { throw Object.assign(new Error(T("offline")), { offline: true }); }
     const out = await r.json().catch(() => ({}));
     return { r, out };
   };
@@ -2061,11 +2169,30 @@ document.addEventListener("change", e => {
     render();
     return true;
   }
+  // A check that could not reach the hub (offline, PLAN.md, Offline)
+  // leaves nothing to post with and says why, and is made again when the
+  // browser says it is back online, when the page is shown again, and
+  // every fifteen seconds meanwhile; the line it left goes with the
+  // verdict it brings.
+  let away = 0, checking = false;
   async function check() {
     verdict = null;
+    clearTimeout(away);
+    checking = true;
     render();
-    try { adopt(await load()); } catch (e) { if (me) tell(e.message); }
+    try {
+      const st = await load();
+      if (flash === T("offline")) flash = "";
+      adopt(st);
+    } catch (e) {
+      if (!me) return;
+      tell(e.message);
+      if (e.offline) away = setTimeout(recheck, 15000);
+    } finally { checking = false; }
   }
+  const recheck = () => { if (me && !verdict && !checking && !busy && !document.hidden) check(); };
+  addEventListener("online", recheck);
+  document.addEventListener("visibilitychange", recheck);
 
   // Sign in with Solana, pressed. A wallet that still trusts the hub
   // connects without a word, even after Sign Out — which forgets the
@@ -3467,6 +3594,12 @@ document.addEventListener("change", e => {
 </body>
 </html>
 {{end}}
+
+{{/* the Offline strip a kept copy wears (PLAN.md, Offline): shown by
+     the data-saved the service worker writes on <html>, its words and
+     time set by the saved-copy script, Reload shown there on a page
+     that is not live once the hub answers again */}}
+{{define "saved"}}<div class="saved" role="status"><span class="sv"></span><button type="button" class="btn sv-re" hidden>{{T "reload"}}</button></div>{{end}}
 
 {{/* The pager's cells — Prev, the counts, Next — the same at either end
      of a list. Which list is the page: the cursor links and the counts

@@ -199,7 +199,12 @@ unfurls with OpenGraph title, excerpt and picture. The pages install as a
 web app, and an installed copy, on a phone most of all, can receive
 push notifications — every post that lands, or, signed in, the replies
 and mentions that concern that id: RFC 8030, 8291 and 8292 in the
-standard library, nothing else.
+standard library, nothing else. They also read offline: the service
+worker keeps every page a reader opens, with its pictures, and shows
+the kept copy, marked Offline, when the hub cannot be reached (no
+network, a 502 from the edge, no answer in three seconds); a page never
+opened says so and loads itself once the hub answers. Online, every
+page still comes from the hub. Posting needs the network.
 
 `/stats` is the hub's own analytics — visitors, page views, sessions,
 bounce rate and session time against the span before, a chart, who is

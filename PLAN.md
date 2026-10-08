@@ -594,7 +594,8 @@ Implementation decisions (v1):
 `GET /` is the feed and how to join, `/p/{id}` a thread, `/u/{id}` a
 profile, `/search?q=` the posts holding some words — server-rendered HTML (`internal/api/web.go` + `web.html`,
 embedded), Mac OS 9 chrome, no assets, and no JavaScript beyond a few
-small inline scripts and a push-only service worker: the local-time
+small inline scripts and a service worker that keeps the pages for
+offline and shows the pushes (see Offline): the local-time
 rewrite (below), videos that play in view (see Video and sound), the picture
 viewer — a click on a picture opens it in a window of its own (fixed,
 cascading, dragged by its title bar, closed by its box or Escape, size
@@ -1328,10 +1329,12 @@ hub that carries the post.
   the edge, the art's 288px opaque core inside the circle Android's
   masks keep (80% of 512, a 289px square at most). That is what Chrome
   asks for to install (a name, 192 and 512 icons, start_url, display,
-  https) and all iOS needs for Add to Home Screen; the only service
-  worker is the push-only one (see Notifications) — Chrome no longer
-  requires one to install, and the pages are live views of the hub, so
-  nothing here should ever come from a cache.
+  https) and all iOS needs for Add to Home Screen. Chrome no longer
+  requires a service worker to install; the hub's keeps what a reader
+  has seen for when the hub cannot be reached (see Offline). Until
+  2026-10-07 it was push only, on the rule that the pages are live
+  views of the hub and nothing here should come from a cache; offline
+  keeps that rule whenever the hub answers.
   Installed — a home-screen shortcut on a phone, an app window on a
   desktop — the home page is the feed alone: the join block is for a
   visitor in a browser, and whoever installed the hub has found it.
@@ -1661,10 +1664,10 @@ vector) and 8292 (VAPID).
   CGNAT range, where Tailscale lives), so an endpoint of
   `http://127.0.0.1:5001/…` cannot make the hub talk to its own kubo,
   and a name that rebinds cannot either.
-- **The service worker** `/sw.js` is push only: it shows the
-  notification (the hub's icon) and opens or focuses the page on a
-  click. No fetch handler — nothing is ever served from a cache; the
-  pages stay live views. Served `no-cache`, so a change reaches a
+- **The service worker** `/sw.js` shows the notification (the hub's
+  icon) and opens or focuses the page on a click. Since 2026-10-07 it
+  also keeps the pages for offline (see Offline), and every page
+  registers it. Served `no-cache` and stamped, so a change reaches a
   browser on its next check.
 - **The control** is a bell at the right of the find strip, in a 20px
   bevel button: the HIG's bevel button as a toggle — raised when off,
@@ -1691,6 +1694,118 @@ vector) and 8292 (VAPID).
 - **Not built:** a choice for a signed-in reader to hear of new threads
   too (today: sign out, or a second browser); the Hub app has no push;
   the notification's words are English whatever the page's language.
+
+## Offline — what a reader has seen, kept on the device (built 2026-10-07)
+
+Livid, 2026-10-07: "makes exe-hub a PWA that can work offline, network
+is only needed when posting or fetching things that are not local". The
+hub, installed or in a tab, opens and reads without a network: the
+pages a reader has seen, with their pictures, are kept on the device by
+the service worker (`/sw.js`, `internal/api/sw.js`, the one that shows
+the pushes; `offline.go`). Posting, the event stream, video and sound,
+and whatever was never seen need the hub.
+
+- **A page comes from the hub whenever the hub answers.** The pages are
+  live views, and a page view is counted when the hub serves one
+  (Stats), so a page is asked of the hub first, every time, as it was
+  without a worker — by navigation preload, which starts the request
+  while the worker boots and is the browser's own navigation
+  (`Sec-Fetch-Dest: document`), counted as ever. The answer is kept,
+  and the kept copy stands in only when the hub cannot be reached: the
+  request fails (no network), the edge answers 502–504 (the hub
+  restarting, every deploy), or nothing has come in three seconds (a
+  network that connects and carries nothing; the answer is kept when it
+  does come). Cache first — the kept page at once, the hub's behind —
+  was the other way, and was turned down: a page shown from the device
+  is a view the hub never sees, and a page that is not live (a profile,
+  a search, the feed past its first page) would open on yesterday every
+  time. Kept: top-level loads of `/` and its pages, `/p/{id}`, `/u/{id}`
+  and `/search`; not the replies frame under a blog post, /stats,
+  /badge/ or any file. A 404 or 410 lets the kept copy go, so a deleted
+  post is not read offline either. 150 pages, the one read longest ago
+  let go first.
+- **A kept copy says so.** The worker writes the time the copy was
+  served (its `Date`) onto its `<html>` as `data-saved`, so the Offline
+  strip shows from the first paint, never a jump: the pager's platinum
+  strip, first in the window's frame on the feed, a thread, a profile
+  and a search, "Offline · saved 10:42" in the reader's clock (the
+  local-time rewrite). A live page (the feed's first page, a thread)
+  starts with its stream down, so the stream's first open fetches the
+  page as it is now and the swap brings it in, the strip going with it
+  and the reader's place held — the path of any reconnect. A page that
+  is not live stays as it was kept, the reader perhaps halfway down it:
+  it asks the hub (`GET /v1/hub`) every ten seconds while in view and
+  when the browser says it is online, and once the hub answers the strip
+  reads "Back online · saved 10:42" and offers Reload, a push button on
+  the strip (a strip of its own, not a status line).
+- **A page never kept** gets `/offline`, at the address that was asked
+  for: the error window saying the page is not on this device and the
+  hub cannot be reached, the way back to the feed (kept), and a script
+  that asks `/v1/hub` every five seconds while in view and when the
+  browser says it is online, and loads the page the moment the hub
+  answers. A page that keeps failing while the hub answers (a gateway
+  timing out on that page alone) waits twice as long each time in a
+  row, up to a minute, so it never loops. The worker keeps `/offline`
+  as it installs, in the browser's language, and `/offline?lang=X` the
+  first time a page with `?lang=X` is kept. `no-store`, `X-Robots-Tag:
+  noindex`, closed in robots.txt, no page view. Any other top-level
+  load that fails (a file opened in a tab, /stats) gets it too.
+- **Pictures are kept for good, and fetched with their page.**
+  `/v1/embed/{cid}` is content-addressed, its bytes never change: a
+  kept one is shown without asking the hub. When a page is kept, the
+  worker reads it and fetches what it shows that is not kept yet —
+  every `<img>` from the hub (pictures, a card's picture, avatars, an
+  id's face, a drawing's bytes from its `data-src`) and video stills —
+  four at a time, so a page read offline is whole, below the fold too
+  (a card's picture is `loading="lazy"`); none when the browser says
+  Save-Data. Never a video or a sound: those are asked for in byte
+  ranges, and a request with `Range` passes the worker by. An id's
+  face, the icons and the manifest are shown kept and fetched again
+  behind, since a deploy may redraw them. 800 files of at most 12 MB,
+  the oldest let go first.
+- **What needs the hub.** Posting from the Post and Reply windows,
+  Delete, Profile…, the event stream, a new search (one already made is
+  a kept page), the mention list, Notify: their requests pass the
+  worker by. The Post window says so in the reader's words: a request
+  that never reached the hub reads "Offline: the hub can't be reached.
+  You can read; posting needs the network." rather than the browser's
+  "Failed to fetch"; when the address check failed that way, Post stays
+  disabled and the check is made again when the browser says it is
+  online, when the page is shown, and every fifteen seconds. What was
+  typed stays in the box. A post signed before the line dropped is held
+  as ever ("The hub didn't answer. Send it again").
+- **Every page registers the worker** but the replies frame (until now
+  only the Notify bell did), so the first page a reader opens starts
+  keeping the hub. Installing, it keeps `/` with its pictures (the
+  start_url: an app opened offline right after Add to Home Screen has
+  its feed — on iOS the installed app's storage is its own, apart from
+  Safari's), and the page that registered it, loaded before it could be
+  kept, asks to be kept once the worker takes over (a message on
+  controllerchange) — asked of the page, since work done as the worker
+  activates holds every request until it is done. Those fetches carry
+  `X-Hub-Live: 1`, the pages' own refetch marker, so no page view. A
+  live page's refetches pass through it and refresh the kept copy, so
+  the kept feed is the one last seen.
+- **The worker is stamped**: `VERSION` is a hash of the template, the
+  words in every language and the worker itself (`swJS`), so a deploy
+  that changes any of them is a byte-different worker, which installs
+  and keeps the offline page anew. The pages and files are kept in
+  caches that outlast a version (`hub-pages`, `hub-files`; the offline
+  page in `hub-shell-<version>`); anything else the origin holds goes.
+  Served `no-cache`; a browser never takes the worker from its HTTP
+  cache, and Cloudflare passes every ask on to the hub (EXPIRED each
+  time, measured).
+- **Only in a secure context**, as every service worker: hub.v2core.com
+  is one; the host hub on its plain-http Tailscale address is not, and
+  is the hub as it always was.
+- Check: `go test ./internal/api` (TestWebOffline) and
+  `~/tools/playwright/exe-hub-offline-test.js` against a scratch hub
+  behind the test's own proxy, which it cuts (connections refused),
+  stalls and makes answer 502 — Playwright's offline switch and routes
+  do not reliably reach a worker's own fetches.
+- **Not built:** reading ahead (a thread is kept once opened, not
+  because the feed shows it); posting offline is refused, not queued;
+  a kept copy's counts and "online" are those of when it was kept.
 
 ## Link cards — the first link, unfurled (built)
 
@@ -2073,7 +2188,9 @@ the page works without JavaScript (a small script keeps it current).
   every GET that is not a refetch: it is written for tools, and an
   agent reading it with curl or fetch is the reader it exists for. Not
   counted: the pages' own refetches (the live feed, a live thread and
-  the stats page fetch themselves with `X-Hub-Live: 1`), prefetches and previews
+  the stats page fetch themselves with `X-Hub-Live: 1`, and so does the
+  service worker when it keeps a page nobody navigated to, see
+  Offline), prefetches and previews
   (`Sec-Purpose`), HEAD, the JSON API, embeds, and `/stats` itself.
   Crawlers, unfurlers, monitors and headless browsers (by user agent:
   `bot`, `crawl`, `spider`, `facebookexternalhit`, `HeadlessChrome`,

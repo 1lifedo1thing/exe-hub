@@ -1,7 +1,6 @@
 package api
 
 import (
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"io"
@@ -16,19 +15,11 @@ import (
 // that concern that id. Subscribing takes no signature, like reading:
 // the id is a filter over public posts; an endpoint is a secret the
 // browser minted, so knowing it is owning it, and telling the hub again
-// (a sign-in, a sign-out) or unsubscribing needs nothing more.
-
-//go:embed sw.js
-var swJS []byte
+// (a sign-in, a sign-out) or unsubscribing needs nothing more. The
+// service worker that shows the pushes is offline.go's.
 
 // pushMax bounds the notifier's work per post.
 const pushMax = 10000
-
-func (s *Server) handleSW(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Write(swJS)
-}
 
 func (s *Server) handlePushSubscribe(w http.ResponseWriter, r *http.Request) {
 	if s.Push == nil {

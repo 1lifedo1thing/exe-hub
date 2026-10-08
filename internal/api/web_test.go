@@ -187,7 +187,8 @@ func TestWebHome(t *testing.T) {
 // TestWebLocale: the page's language is ?lang= when it names one the
 // pages speak, else the browser's highest-q tag, else English.
 // TestWebRobots: robots.txt keeps crawlers off the stats desk and its
-// JSON, an endless space of filter links, and off nothing else.
+// JSON, an endless space of filter links, and the service worker's
+// offline page, and off nothing else.
 func TestWebRobots(t *testing.T) {
 	s := testServer(t, &config.Config{Gate: config.Gate{Mode: "open"}})
 	w := httptest.NewRecorder()
@@ -198,7 +199,7 @@ func TestWebRobots(t *testing.T) {
 	if got := w.Header().Get("Content-Type"); got != "text/plain; charset=utf-8" {
 		t.Errorf("type %q", got)
 	}
-	if got := w.Body.String(); got != "User-agent: *\nDisallow: /stats\nDisallow: /v1/stats\n" {
+	if got := w.Body.String(); got != "User-agent: *\nDisallow: /stats\nDisallow: /v1/stats\nDisallow: /offline\n" {
 		t.Errorf("robots.txt = %q", got)
 	}
 }
@@ -1274,7 +1275,8 @@ func postJSON(t *testing.T, h http.Handler, path, body string) (int, string) {
 }
 
 // TestWebPush: on a hub with a push key the home page carries the head
-// script, the Notify bell with the key, and the push-only service worker;
+// script, the Notify bell with the key, and the service worker that
+// shows the pushes (and keeps the pages, TestWebOffline);
 // subscribing takes a browser's subscription and nothing else, and
 // unsubscribing forgets it. Without a key, none of it.
 func TestWebPush(t *testing.T) {
@@ -1307,7 +1309,7 @@ func TestWebPush(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("GET", "http://hub.example/sw.js", nil))
-	if w.Code != 200 || w.Header().Get("Content-Type") != "text/javascript; charset=utf-8" || !strings.Contains(w.Body.String(), `addEventListener("push"`) || strings.Contains(w.Body.String(), `"fetch"`) {
+	if w.Code != 200 || w.Header().Get("Content-Type") != "text/javascript; charset=utf-8" || !strings.Contains(w.Body.String(), `addEventListener("push"`) {
 		t.Errorf("sw.js: %d %s", w.Code, w.Header().Get("Content-Type"))
 	}
 	_, hub := get(t, h, "/v1/hub")

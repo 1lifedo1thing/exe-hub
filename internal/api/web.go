@@ -219,11 +219,12 @@ func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
 // feed, the threads and the profiles, and kept off the stats desk and
 // its JSON: there every row is a filter and every state a URL, an
 // endless space to walk, and on 2026-09-24 one GPTBot address walked it
-// some 7,000 times an hour for a day, most of the hub's traffic. Only
-// those two paths are closed — pictures, identicons and preview cards
-// stay open, because an unfurler that reads robots.txt (Twitterbot)
-// fetches a card's image from /v1/.
-const webRobots = "User-agent: *\nDisallow: /stats\nDisallow: /v1/stats\n"
+// some 7,000 times an hour for a day, most of the hub's traffic. Those
+// two paths are closed, and the offline page (offline.go), which is the
+// service worker's and nobody's to read — pictures, identicons and
+// preview cards stay open, because an unfurler that reads robots.txt
+// (Twitterbot) fetches a card's image from /v1/.
+const webRobots = "User-agent: *\nDisallow: /stats\nDisallow: /v1/stats\nDisallow: /offline\n"
 
 func (s *Server) handleRobots(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")

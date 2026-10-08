@@ -350,6 +350,14 @@ var webStrings = map[string]map[string]string{
 		"err.profile":   "The profile could not be read.",
 		"err.nostats":   "No stats on this hub.",
 		"err.stats":     "The stats could not be read.",
+		// offline (PLAN.md, Offline): the page the service worker shows
+		// for one it never kept, the strip on a kept copy, the Post window
+		"offline.title": "Offline",
+		"err.offline":   "This page isn’t saved on this device, and the hub can’t be reached. It opens by itself as soon as the hub answers.",
+		"saved.off":     "Offline · saved {time}",
+		"saved.on":      "Back online · saved {time}",
+		"reload":        "Reload",
+		"offline":       "Offline: the hub can’t be reached. You can read; posting needs the network.",
 		// the badge page (/badge/)
 		"badge":       "Badge",
 		"badge.desc":  "An 88×31 button to link to {host} with, the kind every page of the 1990s web kept in its footer.",
@@ -534,6 +542,12 @@ var webStrings = map[string]map[string]string{
 		"err.profile":        "无法读取资料。",
 		"err.nostats":        "这个 hub 没有统计。",
 		"err.stats":          "无法读取统计。",
+		"offline.title":      "离线",
+		"err.offline":        "这个页面没有保存在本机，现在也连不上 hub。hub 一有回应，它就会自动打开。",
+		"saved.off":          "离线 · 保存于 {time}",
+		"saved.on":           "已恢复连接 · 保存于 {time}",
+		"reload":             "重新载入",
+		"offline":            "离线：连不上 hub。可以继续阅读，发帖需要联网。",
 		// the badge page (/badge/)
 		"badge":       "徽章",
 		"badge.desc":  "一个 88×31 的按钮，用来链接到 {host}，就像九十年代每个网页页脚里的那种。",
@@ -722,6 +736,12 @@ var webStrings = map[string]map[string]string{
 		"err.profile":        "無法讀取個人資料。",
 		"err.nostats":        "這個 hub 沒有統計。",
 		"err.stats":          "無法讀取統計。",
+		"offline.title":      "離線",
+		"err.offline":        "這個頁面沒有儲存在本機，現在也連不上 hub。hub 一有回應，它就會自動開啟。",
+		"saved.off":          "離線 · 儲存於 {time}",
+		"saved.on":           "已恢復連線 · 儲存於 {time}",
+		"reload":             "重新載入",
+		"offline":            "離線：連不上 hub。可以繼續閱讀，發文需要連網。",
 		// the badge page (/badge/)
 		"badge":       "徽章",
 		"badge.desc":  "一個 88×31 的按鈕，用來連結到 {host}，就像九〇年代每個網頁頁尾裡的那種。",
@@ -906,6 +926,12 @@ var webStrings = map[string]map[string]string{
 		"err.profile":        "プロフィールを読めませんでした。",
 		"err.nostats":        "この hub に統計はありません。",
 		"err.stats":          "統計を読めませんでした。",
+		"offline.title":      "オフライン",
+		"err.offline":        "このページはこの端末に保存されておらず、hub にも接続できません。hub が応答すると自動で開きます。",
+		"saved.off":          "オフライン · {time} に保存",
+		"saved.on":           "オンラインに戻りました · {time} に保存",
+		"reload":             "再読み込み",
+		"offline":            "オフライン：hub に接続できません。読むことはできますが、投稿にはネットワークが必要です。",
 		// the badge page (/badge/)
 		"badge":       "バッジ",
 		"badge.desc":  "{host} へリンクするための 88×31 のボタン。90 年代のウェブで、どのページのフッターにも並んでいたあれです。",
