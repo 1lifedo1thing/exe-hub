@@ -508,6 +508,15 @@ html[data-saved] .saved { display: flex; }
    that the levels flatten, so a deep thread still fits a phone */
 .post.reply { padding-left: min(calc(36px + (var(--d, 1) - 1) * 22px), 40%); }
 .post.reply.deep { border-left: 1px solid #ddd; }
+/* a listed post is the way into its page (PLAN.md, Public pages — The
+   body is the way in): the hand says so, except over the players, cards
+   and translate line where a press does nothing, and a faint grey lies
+   under the mouse — translucent, so it reads on white, on a reply's
+   grey and on paper. A finger has no mouse: a phone keeps the post as
+   it is. */
+.post[data-href] { cursor: pointer; }
+.post[data-href] :is(.embeds, .card, .trl) { cursor: auto; }
+@media (hover: hover) { .post[data-href]:hover { background-color: rgba(0, 0, 0, .03); } }
 /* the reply a foot's latest link lands on (#anchor): the same tint
    the Hub app gives its jumped-to reply */
 .post:target { background: #f4f4ff; }

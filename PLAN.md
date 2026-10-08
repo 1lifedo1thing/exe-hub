@@ -741,11 +741,16 @@ hub that carries the post.
   a press), and one listener on the document follows it, so the posts
   a live page brings in need nothing. A drag that selected words is not
   a press; a middle or a modified press opens the page in a new tab, as
-  on a link. Nothing is drawn for it: no hover, no hand — the time and
-  the reply count stay the visible links, the Tab stops and the links
-  to open in a new tab, and without script they are what there is.
-  Asked by Livid 2026-10-08 after a visitor found that a post without
-  replies could be entered only through its time.
+  on a link. The hand says so (`cursor: pointer` on the post, not on
+  its players, cards or translate line, where a press does nothing),
+  and a faint grey lies under the mouse (`rgba(0,0,0,.03)`, so it
+  reads on white, on a reply's grey and on paper); a finger has no
+  mouse, so under `(hover: none)` a phone keeps the post as it is. The
+  time and the reply count stay the Tab stops and the links to open in
+  a new tab, and without script they are what there is. Asked by Livid
+  2026-10-08 after a visitor found that a post without replies could
+  be entered only through its time; the hand and the grey the same
+  day, after a first version drew nothing.
 - **Profile replies quoted (built 2026-09-16).** On `/u/{id}` a reply
   is the foot of a small card: above it, in quieter grey, the post it
   answers — the author and a line of it (`webQuoted`, a 140-char

@@ -111,6 +111,11 @@ func TestWebHome(t *testing.T) {
 	if !strings.Contains(body, `data-au="`+identity.Fingerprint(pub)+`" data-href="/p/`+id+`"`) || !strings.Contains(body, `document.addEventListener("click", bodyPress)`) {
 		t.Error("the listed post lacks data-href, or the page the press that follows it")
 	}
+	// the hand and the faint grey under the mouse say the body is the way
+	// in; the grey waits for a mouse, so a phone keeps the post as it is
+	if !strings.Contains(body, ".post[data-href] { cursor: pointer; }") || !strings.Contains(body, "@media (hover: hover) { .post[data-href]:hover { background-color: rgba(0, 0, 0, .03); } }") {
+		t.Error("the listed post lacks its hand or its hover grey")
+	}
 	if _, zh := get(t, h, "/?lang=zh"); !strings.Contains(zh, ` data-href="/p/`+id+`?lang=zh"`) {
 		t.Error("the listed post's data-href drops the reader's ?lang=")
 	}
