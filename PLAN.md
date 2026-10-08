@@ -1750,6 +1750,31 @@ and whatever was never seen need the hub.
   first time a page with `?lang=X` is kept. `no-store`, `X-Robots-Tag:
   noindex`, closed in robots.txt, no page view. Any other top-level
   load that fails (a file opened in a tab, /stats) gets it too.
+  **At the deadline too** (Codex, 2026-10-08, from a Node harness of the
+  worker; Livid: "Improve."). As first built the three seconds passing
+  with the hub's answer still owed and no copy kept gave nothing: the
+  offline page came only when the fetch failed or the edge answered
+  502, so a link that stalled rather than failed — weak Wi-Fi, a tunnel
+  dropping packets — hung until the browser gave up. Now the deadline
+  gives the offline page when there is no kept copy, and the worker
+  remembers that one waits at that address (`waiting`). The fetch runs
+  on; when its answer lands and is kept, the worker tells the window at
+  that address (`clients.matchAll`, a message `{arrived}`), the offline
+  page loads itself, and the worker hands that load the copy it just
+  kept (`arrived`, within 30 s) — at once and as the hub served it,
+  unmarked, since it is the hub's answer to what that page asked a
+  moment ago — rather than asking the same slow link again and waiting
+  three more seconds on it. A page that is merely slow (three and a
+  half seconds) shows the offline page for the half second until its
+  answer lands, the cost weighed in the thread; a hang was the
+  alternative. A 404 landing for it tells nothing: the offline page
+  asks the hub itself and the load brings the 404. The offline page's
+  and the strip's asks of `/v1/hub` (`hubAnswers`) give up after four
+  seconds, since on a stalled link a fetch never fails on its own and
+  the next ask would never have been made; the browser's `online`
+  event says nothing of a stall. The worker's two maps are memory: a
+  worker the browser stopped meanwhile forgets, and the load takes the
+  ordinary way, the kept copy at the deadline.
 - **Pictures are kept for good, and fetched with their page.**
   `/v1/embed/{cid}` is content-addressed, its bytes never change: a
   kept one is shown without asking the hub. When a page is kept, the
@@ -1801,8 +1826,9 @@ and whatever was never seen need the hub.
 - Check: `go test ./internal/api` (TestWebOffline) and
   `~/tools/playwright/exe-hub-offline-test.js` against a scratch hub
   behind the test's own proxy, which it cuts (connections refused),
-  stalls and makes answer 502 — Playwright's offline switch and routes
-  do not reliably reach a worker's own fetches.
+  stalls (a page held seven seconds; every request held, never
+  answered) and makes answer 502 — Playwright's offline switch and
+  routes do not reliably reach a worker's own fetches.
 - **Not built:** reading ahead (a thread is kept once opened, not
   because the feed shows it); posting offline is refused, not queued;
   a kept copy's counts and "online" are those of when it was kept.

@@ -1273,6 +1273,15 @@ localTimes(document);
 // the hub answers — asked every ten seconds while the page is in view,
 // and whenever the browser says it is back online — the strip says so
 // and offers Reload.
+//
+// Whether the hub answers: GET /v1/hub, ok within four seconds. A link
+// that stalls rather than fails never fails a fetch on its own, so one
+// left to itself would hang and the next ask never be made; and the
+// browser's online event says nothing of a stall.
+function hubAnswers() {
+  const c = new AbortController(), kill = setTimeout(() => c.abort(), 4000);
+  return fetch("/v1/hub", { cache: "no-store", signal: c.signal }).then(r => r.ok, () => false).finally(() => clearTimeout(kill));
+}
 (() => {
   const saved = document.documentElement.dataset.saved, strip = document.querySelector(".saved");
   if (!saved || !strip) return;
@@ -1289,12 +1298,12 @@ localTimes(document);
   const ask = () => {
     clearTimeout(t);
     if (back || document.hidden) return;
-    fetch("/v1/hub", { cache: "no-store" }).then(r => {
-      if (!r.ok) throw new Error(r.status);
+    hubAnswers().then(ok => {
+      if (!ok) { t = setTimeout(ask, 10000); return; }
       back = true;
       say("saved.on");
       re.hidden = false;
-    }).catch(() => { t = setTimeout(ask, 10000); });
+    });
   };
   addEventListener("online", ask);
   document.addEventListener("visibilitychange", ask);
@@ -1303,27 +1312,36 @@ localTimes(document);
 </script>
 {{if eq .Page "offline"}}<script>
 // The offline page (PLAN.md, Offline): the service worker shows it at the
-// address of a page it never kept while the hub cannot be reached. It
-// asks the hub every five seconds while it is in view, and whenever the
-// browser says it is back online, and the moment the hub answers loads
-// the page it stands for. A page that keeps failing while the hub
-// answers (a gateway timing out on it alone) would load again and again,
-// so each load in a row waits twice as long, to a minute. At its own
-// address it is only itself, and asks nothing.
+// address of a page it never kept while the hub cannot be reached, or
+// has not answered in three seconds. It asks the hub every five seconds
+// while it is in view, and whenever the browser says it is back online,
+// and the moment the hub answers loads the page it stands for; and when
+// the worker says the answer it was still waiting for has landed, the
+// same, that load being handed the copy just kept. A page that keeps
+// failing while the hub answers (a gateway timing out on it alone)
+// would load again and again, so each load in a row waits twice as
+// long, to a minute. At its own address it is only itself, and asks
+// nothing.
 (() => {
   if (location.pathname === "/offline") return;
   const KEY = "exe-hub-offline";
   let tries = 0;
   try { const m = JSON.parse(sessionStorage.getItem(KEY) || "null"); if (m && m.url === location.href && Date.now() - m.at < 120000) tries = m.n; } catch (e) {}
+  const load = () => {
+    try { sessionStorage.setItem(KEY, JSON.stringify({ url: location.href, at: Date.now(), n: tries + 1 })); } catch (e) {}
+    location.reload();
+  };
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", e => {
+      if (e.data && e.data.arrived === location.origin + location.pathname + location.search) load();
+    });
+    if (navigator.serviceWorker.startMessages) navigator.serviceWorker.startMessages(); // a listener added this way hears nothing until asked
+  }
   let t;
   const ask = () => {
     clearTimeout(t);
     if (document.hidden) return;
-    fetch("/v1/hub", { cache: "no-store" }).then(r => {
-      if (!r.ok) throw new Error(r.status);
-      try { sessionStorage.setItem(KEY, JSON.stringify({ url: location.href, at: Date.now(), n: tries + 1 })); } catch (e) {}
-      location.reload();
-    }).catch(() => { t = setTimeout(ask, 5000); });
+    hubAnswers().then(ok => { if (ok) load(); else t = setTimeout(ask, 5000); });
   };
   addEventListener("online", ask);
   document.addEventListener("visibilitychange", ask);

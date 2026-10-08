@@ -9,7 +9,8 @@
 // <html> (data-saved), the page shows its Offline strip, and a live page
 // catches up by itself once the hub answers. A page never kept gets
 // /offline, kept as the worker installs, which loads the page it stands
-// for once the hub answers. Pictures are content-addressed and never
+// for once the hub answers — or once the answer the worker is still
+// waiting for lands. Pictures are content-addressed and never
 // change, so a kept one is shown without asking, and a page is kept with
 // its pictures. Posting, the event stream, the JSON API, video and sound
 // go to the network as if there were no worker.
@@ -83,23 +84,51 @@ self.addEventListener("fetch", e => {
 // A page: the hub's answer when it comes in time; the kept copy, marked,
 // when it does not come or does not come in time; the offline page when
 // none was kept. The hub's answer is kept whenever it comes, even after
-// the copy was shown.
+// the copy or the offline page was shown.
+//
+// In time is three seconds. A link that stalls rather than fails — weak
+// Wi-Fi, a tunnel dropping packets — never fails the fetch, so the
+// deadline is the only way out, and with no kept copy it used to give
+// nothing: the page hung until the browser gave up (Codex, 2026-10-08).
+// Now it gives the offline page, and remembers that one waits at that
+// address (waiting). The fetch runs on; when its answer lands and is
+// kept, the window at that address is told (tell), the offline page
+// loads itself, and that load is handed the copy just kept (arrived):
+// at once and as the hub served it, since it is the hub's answer to
+// the question the page asked a moment ago, rather than the same slow
+// link asked again and three more seconds waited on it.
+const waiting = new Map(); // key → true: the offline page stands at that address, its fetch in flight
+const arrived = new Map(); // key → when the page landed for the offline page waiting there
 async function page(e, url) {
-  const pages = await caches.open(PAGES);
+  const k = key(url), pages = await caches.open(PAGES);
   const net = Promise.resolve(e.preloadResponse).then(res => res || fetch(e.request)).then(res => keep(e, url, res, pages));
   later(e, net);
-  const saved = async () => { const res = await pages.match(key(url), any); return res && marked(res); };
+  const at = arrived.get(k);
+  arrived.delete(k);
+  if (at && Date.now() - at < 30000) {
+    const res = await pages.match(k, any);
+    if (res) return res;
+  }
+  const saved = async () => { const res = await pages.match(k, any); return res && marked(res); };
   return new Promise(resolve => {
     let done = false;
-    const give = res => { if (res && !done) { done = true; resolve(res); } return done; };
-    const away = async res => give(await saved()) || give(await offline(url)) || give(res || Response.error());
-    const slow = setTimeout(() => saved().then(give), WAIT);
+    const give = res => { if (!res || done) return false; done = true; resolve(res); return true; };
+    const away = async res => { give(await saved()) || give(await offline(url)) || give(res || Response.error()); };
+    const slow = setTimeout(async () => {
+      if (give(await saved())) return;
+      if (give(await offline(url))) waiting.set(k, true);
+    }, WAIT);
     net.then(res => {
       clearTimeout(slow);
       // the edge's own answer while the hub restarts is no page
       if (res.status >= 502 && res.status <= 504) away(res); else give(res);
-    }, () => { clearTimeout(slow); away(); });
+    }, () => { clearTimeout(slow); waiting.delete(k); away(); });
   });
+}
+
+// the offline page standing at that address hears that its page is here
+async function tell(k) {
+  for (const c of await self.clients.matchAll({ type: "window" })) if (key(new URL(c.url)) === k) c.postMessage({ arrived: k });
 }
 
 // any other top-level load: the network's, or the offline page
@@ -114,7 +143,7 @@ async function other(e, url) {
 
 // The hub's answer for a page, kept and handed on: the page kept with its
 // pictures (and the offline page in its language), a page the hub says
-// is gone let go.
+// is gone let go; an offline page waiting for it told, once it is kept.
 function keep(e, url, res, pages) {
   const k = key(url);
   if (res.status === 200 && /^text\/html/.test(res.headers.get("Content-Type") || "")) {
@@ -122,14 +151,20 @@ function keep(e, url, res, pages) {
     later(e, (async () => {
       const c = pages || await caches.open(PAGES);
       await c.put(k, copy);
+      if (waiting.delete(k)) {
+        for (const [o, t] of arrived) if (Date.now() - t > 30000) arrived.delete(o);
+        arrived.set(k, Date.now());
+        await tell(k);
+      }
       await trim(PAGES, KEEP_PAGES);
       const lang = url.searchParams.get("lang");
       if (lang) await offlineIn(lang);
       const kept = await c.match(k, any);
       if (kept) await pictures(await kept.text());
     })());
-  } else if (res.status === 404 || res.status === 410) {
-    later(e, caches.open(PAGES).then(c => c.delete(k, any)));
+  } else {
+    waiting.delete(k); // nothing landed for it; its offline page asks the hub itself
+    if (res.status === 404 || res.status === 410) later(e, caches.open(PAGES).then(c => c.delete(k, any)));
   }
   return res;
 }
