@@ -772,7 +772,9 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
    above the title across the card, 16:9, a Play button on it. A press
    puts YouTube's player in that box at the same size, so nothing below
    moves; until then nothing on the page is asked of YouTube. The box's
-   foot is the one line between it and the title. */
+   foot is the one line between it and the title. The card takes the
+   post's whole column, where a link card stops at 480px. */
+.card.yt { max-width: none; }
 .card .ytv { position: relative; aspect-ratio: 16 / 9; background: #000; border-bottom: 1px solid #262626; }
 .card .ytgo, .card .ytv iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: flex; align-items: center; justify-content: center; }
 .card .ytgo { text-decoration: none; }

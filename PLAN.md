@@ -2157,7 +2157,10 @@ puts YouTube's player in that box, playing. Asked by Livid 2026-10-09:
   the first link, a post without embeds, a card that was read. The
   card's picture (YouTube's og:image, pinned like any card's) is the
   poster, `object-fit: cover` on black; the small picture beside the
-  title is dropped, since the poster shows it. A card whose picture did
+  title is dropped, since the poster shows it. The card takes the post's
+  whole column (Livid, the same day: "full width in desktop mode"),
+  where a link card stops at 480px; a phone's column was already its
+  width. A card whose picture did
   not come plays the same over black; a card that failed is no card,
   so no player either.
 - **Which links.** `card.YouTube`: a watch page on www., m. or
