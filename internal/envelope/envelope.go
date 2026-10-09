@@ -103,6 +103,14 @@ type PostMark struct {
 	Done bool   `json:"done"`
 }
 
+// PostBookmark keeps a post among the author's bookmarks (On) or takes
+// it off (PLAN.md, The signed-in reader's desk — Bookmarks): the state
+// asked for, never a toggle.
+type PostBookmark struct {
+	Post string `json:"post"`
+	On   bool   `json:"on"`
+}
+
 // BanSet / BanLift target a profile id (pubkey fingerprint), admin-only.
 type BanSet struct {
 	Target string `json:"target"`
@@ -284,6 +292,15 @@ func (e *Envelope) Op() (any, error) {
 		}
 		if v.Box < 0 || v.Box >= MaxBoxes {
 			return nil, fmt.Errorf("box: 0 to %d", MaxBoxes-1)
+		}
+		return v, nil
+	case "post.bookmark":
+		v := &PostBookmark{}
+		if err := strictBody(e.Body, v); err != nil {
+			return nil, err
+		}
+		if !validMsgID(v.Post) {
+			return nil, errors.New("post: not a post id")
 		}
 		return v, nil
 	case "ban.set":

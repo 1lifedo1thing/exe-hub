@@ -292,6 +292,9 @@ type webPost struct {
 	// "?lang=…" when the request said its language: the post's own links
 	// carry it, so a look at the other language lasts past one click
 	Q string
+	// on a page with the Post window: the post carries the Bookmark
+	// button (PLAN.md, The signed-in reader's desk — Bookmarks)
+	Keep bool
 }
 
 // webTr is a post's translation as the page shows it: standing where
@@ -489,6 +492,9 @@ func (m webMint) Tail() string { return m.Mint[len(m.Mint)/2:] }
 // post a thread page shows.
 type webCompose struct {
 	ReplyTo string
+	// a page the new post does not show on (Notifications, Bookmarks):
+	// once it is sent the reader goes to the feed
+	Away bool
 }
 
 // webData is the template's world for one page.
@@ -520,9 +526,15 @@ type webData struct {
 	Push           bool   // every page on a hub that pushes: the script that keeps a subscription on the signed-in id
 	Query          string // the search page's words, and what the find strip's field holds
 	Join           *webJoin
-	Compose        *webCompose // the wallet strip: the home page's first page and every thread
-	Post           *webPost
-	Replies        []webPost
+	Compose        *webCompose // the wallet strip: the home page's first page, every thread, Notifications and Bookmarks
+	// the Navigation window (PLAN.md, The signed-in reader's desk): the
+	// page carries it (set by webRender), the row it is ("home",
+	// "notifications", "bookmarks", "profile", or "" for none) and the
+	// profile id it is for, whose row is selected only for that reader
+	Nav           bool
+	NavOn, NavFor string
+	Post          *webPost
+	Replies       []webPost
 	// a thread past one page (see PLAN.md, Public pages — Thread paging):
 	// how many pages, the replies this one holds as 1-based positions in
 	// the thread, and the neighbouring pages' numbers, 0 at either end
@@ -1439,6 +1451,25 @@ func (s *Server) webRender(w http.ResponseWriter, r *http.Request, code int, d *
 		d.L = webLocaleOf(r)
 	}
 	d.Push = s.Push != nil
+	switch d.Page {
+	case "home", "notifications", "bookmarks", "profile":
+		d.Nav, d.NavOn = true, d.Page
+	case "thread":
+		d.Nav = true
+	}
+	// where the Post window is, the wallet can sign a bookmark: every
+	// post on the page carries the button
+	if d.Compose != nil {
+		for i := range d.Posts {
+			d.Posts[i].Keep = true
+		}
+		for i := range d.Replies {
+			d.Replies[i].Keep = true
+		}
+		if d.Post != nil {
+			d.Post.Keep = true
+		}
+	}
 	if l := strings.ToLower(r.URL.Query().Get("lang")); l != "" && l != "orig" {
 		d.DateLoc = l
 	}
@@ -2014,7 +2045,7 @@ func (s *Server) handleProfilePage(w http.ResponseWriter, r *http.Request) {
 	}
 	posts := pg.Posts
 	pr, err := s.St.Profile(id)
-	d := &webData{Page: "profile", Posts: webListed(s.webQuoted(rd, s.webPosts(rd, posts))), Prev: pg.Prev, Next: pg.Next, Lang: rd.Lang, Q: rd.Q}
+	d := &webData{Page: "profile", Posts: webListed(s.webQuoted(rd, s.webPosts(rd, posts))), Prev: pg.Prev, Next: pg.Next, Lang: rd.Lang, Q: rd.Q, NavFor: id}
 	switch {
 	case err == nil:
 		d.Profile, d.Count = pr, pr.Posts
@@ -2042,6 +2073,77 @@ func (s *Server) handleProfilePage(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Image = webBase(r) + "/v1/preview/profile/" + d.Profile.ID + ".png"
 	d.ImageW, d.ImageH, d.ImageAlt = preview.W, preview.H, name+" on "+r.Host
+	s.webRender(w, r, http.StatusOK, d)
+}
+
+// handleNotificationsPage: /u/{id}/notifications is what concerns the
+// id, newest first (PLAN.md, The signed-in reader's desk —
+// Notifications): the replies to its posts, the posts that mention it,
+// the replies in its threads. A view of public posts like the push
+// filter, so anyone may open anyone's; noindex, and not live.
+func (s *Server) handleNotificationsPage(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	s.deskList(w, r, "notifications",
+		func(before string, n int) ([]store.FeedPost, error) {
+			return s.St.Notifications(id, before, n, mentionsOf(id))
+		},
+		func(after string, n int) ([]store.FeedPost, error) {
+			return s.St.NotificationsNewer(id, after, n, mentionsOf(id))
+		})
+}
+
+// handleBookmarksPage: /u/{id}/bookmarks is the posts the id keeps, the
+// newest bookmark first (PLAN.md, The signed-in reader's desk —
+// Bookmarks). Public, like everything signed here, and its status line
+// says so.
+func (s *Server) handleBookmarksPage(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	s.deskList(w, r, "bookmarks",
+		func(before string, n int) ([]store.FeedPost, error) { return s.St.Bookmarks(id, before, n) },
+		func(after string, n int) ([]store.FeedPost, error) { return s.St.BookmarksNewer(id, after, n) })
+}
+
+// deskList is a list page of the signed-in reader's desk: the id's
+// posts as webPageOf pages them, the Post window at the head of the
+// column (the wallet strip: the Bookmark and Delete buttons need it),
+// each post drawn as a profile page draws one — the post a reply
+// answers quoted as its head. Any 16-hex id has one, a profile or not:
+// a reader who has signed in but never posted has notifications too.
+func (s *Server) deskList(w http.ResponseWriter, r *http.Request, page string,
+	older func(before string, n int) ([]store.FeedPost, error),
+	newer func(after string, n int) ([]store.FeedPost, error)) {
+	id := r.PathValue("id")
+	if !profileIDRe.MatchString(id) {
+		s.webError(w, r, http.StatusNotFound, "err.noprofile")
+		return
+	}
+	pg, err := webPageOf(r.URL.Query(), older, newer)
+	if errors.Is(err, store.ErrNotFound) {
+		s.webError(w, r, http.StatusNotFound, "err.nopage")
+		return
+	}
+	if err != nil {
+		s.webError(w, r, http.StatusInternalServerError, "err.posts")
+		return
+	}
+	rd := webReadingOf(r)
+	if pg.Home {
+		http.Redirect(w, r, "/u/"+id+"/"+page+rd.Q, http.StatusFound)
+		return
+	}
+	name := id
+	if pr, err := s.St.Profile(id); err == nil {
+		name = profileName(pr)
+	} else if !errors.Is(err, store.ErrNotFound) {
+		s.webError(w, r, http.StatusInternalServerError, "err.profile")
+		return
+	}
+	d := &webData{
+		Page: page, Title: rd.L.T(page+".of", "name", name) + " · " + r.Host,
+		Posts: webListed(s.webQuoted(rd, s.webPosts(rd, pg.Posts))), Prev: pg.Prev, Next: pg.Next,
+		Lang: rd.Lang, Q: rd.Q, NavFor: id, Compose: &webCompose{Away: true},
+		Message: rd.L.T(page+".status", "name", name),
+	}
 	s.webRender(w, r, http.StatusOK, d)
 }
 

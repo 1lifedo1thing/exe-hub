@@ -175,6 +175,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /p/{id}", s.counted("thread", s.handleThreadPage))
 	mux.HandleFunc("GET /p/{id}/replies", s.counted("frame", s.handleRepliesFrame))
 	mux.HandleFunc("GET /u/{id}", s.counted("profile", s.handleProfilePage))
+	mux.HandleFunc("GET /u/{id}/notifications", s.counted("notifications", s.handleNotificationsPage))
+	mux.HandleFunc("GET /u/{id}/bookmarks", s.counted("bookmarks", s.handleBookmarksPage))
 	mux.HandleFunc("GET /search", s.counted("search", s.handleSearchPage))
 	mux.HandleFunc("GET /badge/{$}", s.counted("badge", s.handleBadgePage))
 	mux.HandleFunc("GET /badge", func(w http.ResponseWriter, r *http.Request) {
@@ -213,6 +215,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/profiles", s.handleProfiles)
 	mux.HandleFunc("GET /v1/profile/{id}", s.handleProfile)
 	mux.HandleFunc("GET /v1/profile/{id}/feed", s.handleProfileFeed)
+	mux.HandleFunc("GET /v1/profile/{id}/notifications", s.handleProfileNotifications)
+	mux.HandleFunc("GET /v1/profile/{id}/bookmarks", s.handleProfileBookmarks)
+	mux.HandleFunc("GET /v1/profile/{id}/bookmarks/ids", s.handleProfileBookmarkIDs)
 	mux.HandleFunc("GET /v1/post/{id}", s.handlePost)
 	mux.HandleFunc("GET /v1/search", s.handleSearch)
 	mux.HandleFunc("GET /v1/embed/{cid}", s.handleEmbed)
@@ -578,7 +583,10 @@ func (s *Server) policy(e *envelope.Envelope) error {
 		if banned {
 			return errors.New("this key is banned from posting here")
 		}
-	case "post.create", "profile.set":
+	case "post.create", "profile.set", "post.bookmark":
+		// a bookmark is gated as a profile is, without the cooldown: a
+		// key that could not post here cannot fill the log with them
+		// either (PLAN.md, The signed-in reader's desk — Bookmarks)
 		banned, err := s.St.Banned(pid)
 		if err != nil {
 			return err
@@ -805,6 +813,64 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleProfileFeed(w http.ResponseWriter, r *http.Request) {
 	posts, err := s.St.ProfileFeed(r.PathValue("id"), r.URL.Query().Get("before"), limitParam(r))
 	s.writeFeed(w, posts, err)
+}
+
+// handleProfileNotifications is what concerns a profile id, newest
+// first, each post's why said (PLAN.md, The signed-in reader's desk —
+// Notifications). A view of public posts: anyone may ask for anyone's.
+func (s *Server) handleProfileNotifications(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !profileIDRe.MatchString(id) {
+		writeErr(w, http.StatusBadRequest, errors.New("not a profile id"))
+		return
+	}
+	posts, err := s.St.Notifications(id, r.URL.Query().Get("before"), limitParam(r), mentionsOf(id))
+	s.writeFeed(w, posts, err)
+}
+
+// handleProfileBookmarks is the posts a profile id keeps, the newest
+// bookmark first (PLAN.md, The signed-in reader's desk — Bookmarks).
+func (s *Server) handleProfileBookmarks(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !profileIDRe.MatchString(id) {
+		writeErr(w, http.StatusBadRequest, errors.New("not a profile id"))
+		return
+	}
+	posts, err := s.St.Bookmarks(id, r.URL.Query().Get("before"), limitParam(r))
+	s.writeFeed(w, posts, err)
+}
+
+// handleProfileBookmarkIDs is just the ids of the posts a profile keeps,
+// the newest 1,000: what a page draws its Bookmark buttons by.
+func (s *Server) handleProfileBookmarkIDs(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !profileIDRe.MatchString(id) {
+		writeErr(w, http.StatusBadRequest, errors.New("not a profile id"))
+		return
+	}
+	ids, err := s.St.BookmarkIDs(id, 1000)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"posts": ids})
+}
+
+// profileIDRe is a profile id: 16 lower-case hex digits.
+var profileIDRe = regexp.MustCompile(`^[0-9a-f]{16}$`)
+
+// mentionsOf says whether a text names id as a page shows a mention
+// (card.Mentions: not inside a code span or a link).
+func mentionsOf(id string) func(string) bool {
+	return func(text string) bool {
+		for _, m := range card.Mentions(text) {
+			if text[m[0]+1:m[1]] == id {
+				return true
+			}
+		}
+		return false
+	}
 }
 
 // handleProfiles is what a composer's "@" list asks: the named profiles

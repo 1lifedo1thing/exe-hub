@@ -220,6 +220,12 @@ Envelope: `{type, author (pubkey b64), seq, ts, body}`.
   no post; a banned key's is refused. `box` counts the post's boxes as a
   page reads them, from nought (`card.Boxes`), and `/v1/msg` refuses a
   box the post does not have; the store refuses anyone but the author.
+- `post.bookmark` — `{post, on}`: keeps a post among one's bookmarks
+  (`on` true) or takes it off (false) — the state asked for, never a
+  toggle (see Bookmarks, under The signed-in reader's desk). Any post
+  this hub holds, one's own too; a post it does not hold is refused.
+  Gated like `profile.set` (bans, the token gate, an invite), with no
+  cooldown. Local: it never replicates.
 - `ban.set` / `ban.lift` — admin-only (author must be a config-assigned
   admin): ban or unban a target profile id, with an optional reason on
   `ban.set`.
@@ -238,7 +244,7 @@ feed ordering uses hub receive time.
 ## Storage (SQLite, WAL mode)
 
 - `messages` — append-only log of raw signed envelopes. **Source of truth.**
-- `profiles`, `posts`, `embeds`, `pins`, `bans`, `invites` — derived indexes,
+- `profiles`, `posts`, `embeds`, `pins`, `bans`, `invites`, `bookmarks` — derived indexes,
   rebuildable by replaying `messages`. Schema changes to derived tables
   never lose data.
 - Feed queries use keyset pagination (`before=<id>`), never OFFSET.
@@ -457,6 +463,12 @@ launch mint is `9raU…pump` (6 decimals); the initial threshold is
   them discoverable) unless `replies=1` is passed.
 - `GET  /v1/profile/{id}` — profile info.
 - `GET  /v1/profile/{id}/feed` — one author's feed.
+- `GET  /v1/profile/{id}/notifications?before=&limit=` — the posts that
+  concern that id, newest first, each with `why` (see Notifications,
+  under The signed-in reader's desk).
+- `GET  /v1/profile/{id}/bookmarks?before=&limit=` — the posts that id
+  keeps, newest bookmark first; `GET /v1/profile/{id}/bookmarks/ids` —
+  just their ids, the newest 1,000 (what a page marks its posts by).
 - `GET  /v1/post/{id}` — one post plus its replies (oldest-first, keyset-
   paginated via `after=`).
 - `GET  /v1/search?q=&before=<id>&limit=` — the posts holding every word
@@ -1375,7 +1387,9 @@ hub that carries the post.
   it — the head script's class for a wallet that signed in before, so
   a returning reader's is gone before layout, and the sign-in's; Sign
   Out (or a remembered wallet that is gone now) brings it back. From
-  1060px it sits at the side, out of the column's way, and stays.
+  1060px it sat at the side, out of the column's way, and stayed —
+  until 2026-10-09, when signing in at any width trades it for the
+  Navigation window (see The signed-in reader's desk).
 - **robots.txt (2026-09-24).** `/robots.txt` welcomes crawlers to the
   feed, the threads and the profiles and closes two paths, `/stats` and
   `/v1/stats`: the stats desk links every filter, range and view, and
@@ -1721,6 +1735,99 @@ vector) and 8292 (VAPID).
 - **Not built:** a choice for a signed-in reader to hear of new threads
   too (today: sign out, or a second browser); the Hub app has no push;
   the notification's words are English whatever the page's language.
+
+## The signed-in reader's desk — Navigation, Notifications, Bookmarks (built 2026-10-09)
+
+Livid, 2026-10-09: "after logged in, Join window becomes a navigation
+(using monochrome 24x24 glyph): Home, Notifications, Bookmarks (add a
+bookmark op for post), Profile".
+
+- **The Navigation window.** Signed in (`<html class="wallet">`), the
+  join window gives its place to a window titled Navigation: four rows,
+  each a 24×24 glyph and its word — Home (`/`), Notifications
+  (`/u/{id}/notifications`), Bookmarks (`/u/{id}/bookmarks`), Profile
+  (`/u/{id}`), `?lang=` carried. The glyphs are 1-bit pixel art in the
+  old black-and-white icon idiom (a black outline round a white face,
+  no colour), inline crispEdges SVG like the pages' other glyphs. The
+  page's own row is selected — the `@` list's chosen row, #333399 with
+  the word and the glyph in white. No close box: it is the page's.
+  Sign Out brings the join window back. The id comes from the wallet
+  remembered on this browser (`exe-hub-wallet`), written into the links
+  by a script right after the window's markup, so they are there at the
+  first paint; the Post window's script writes them again when the gate
+  names an id, and on Sign Out.
+- **Where it stands.** Every page a signed-in reader moves between is a
+  desk with the Navigation window at its side, so the column stays where
+  the feed's is: the home page (in the join window's place), a thread
+  (its side, above the Summary window), Notifications, Bookmarks and a
+  profile page. From 1060px it is the side's 360px window, sticky as the
+  join window is. Narrower, on the home page, Notifications, Bookmarks
+  and a profile, it is a strip at the top of the column — the four as
+  tiles across, each glyph over its word — where the join window stood
+  and where a signed-in reader on a phone had nothing (the feed still
+  comes up under the Post window, one short strip lower); a thread on a
+  phone shows none, as its side shows nothing there yet. Signed out,
+  those pages' columns stand centred, as before. The search page keeps
+  its one window. On a page with no Post window (a profile) the head
+  script still classes `<html>` `wallet` from the remembered wallet, so
+  the window is there before layout; nothing there can sign.
+- **Notifications** (`/u/{id}/notifications`): what concerns the id,
+  newest first, by the rules the push notifier uses (Notifications — Web
+  Push, by id): a reply to a post of theirs, a post that mentions them
+  (`card.Mentions`, so not an id in a code span or a link), a reply in a
+  thread they wrote in that came after their first post there — what a
+  subscription would have been pushed. Never their own posts. Each post
+  is drawn as the profile page draws one, the post it answers quoted as
+  its head, and its meta line says why, in place of "in reply to":
+  "replied to you", "mentioned you", "in a thread you're in". Paged like
+  the feed (`before`/`after` post ids, 50 a page), static (not live),
+  `noindex`. Like the push filter it is a view of public posts, not a
+  claim: anyone may open anyone's, and nothing is signed for it. Nothing
+  is marked read; there is no count on the window (not built).
+- **Bookmarks** — `post.bookmark {post, on}`, a signed op (see Envelope
+  & operations). The `bookmarks` table (author's profile id, post, the
+  hub's receive time) is derived like `marks`: an op with `on` keeps the
+  row, one without drops it, and the seq order an author's ops land in
+  is the order they mean, so the last one stands; a deleted post takes
+  its bookmarks with it; Rebuild replays them. **Bookmarks are public**,
+  like everything signed here: `/u/{id}/bookmarks` lists anyone's, and
+  its status line says so. They are this hub's — the op is no content
+  op and never replicates, so a peer neither pulls nor serves them.
+  Gated as `profile.set` is, without the cooldown: a key that could not
+  post here cannot fill the log with bookmarks either.
+- **The Bookmark button** stands on every post's foot line on a page
+  with the Post window (the home page, a thread, Notifications,
+  Bookmarks), for a signed-in reader only: a small push button, Delete's
+  size, holding a ribbon glyph, hollow when the post is not kept and
+  solid black when it is, its title saying which ("Bookmark", "Remove
+  bookmark"). It sits at the right end of the line, Delete (one's own
+  posts) after it. A post with no foot line (no replies, not one's
+  own) gets one under `<html class="wallet">` — the class the head
+  script sets before layout, so a returning reader's feed does not
+  move. A press signs one `post.bookmark` with the state it shows
+  turned over — one wallet prompt, as Delete is — the button turning at
+  once and turning back if the hub refuses, and the status line saying
+  "Bookmarked." or "Bookmark removed." A post taken off the list on the
+  Bookmarks page stays there, hollow, until the page loads again, so a
+  press made by mistake is one press to undo. Which posts are kept: the
+  ids from `/v1/profile/{id}/bookmarks/ids`, remembered on the browser
+  (`exe-hub-bookmarks`, with the id they are for) so the next visit
+  draws them solid before the hub has answered; the page writes one CSS
+  rule for the posts on it (a `<style id="kept">`, as the own-post rule
+  is written), so a post the live page swaps in keeps its look.
+- **A Post window on Notifications and Bookmarks.** The Post window is
+  the wallet strip: only a page that has it can sign, so those two pages
+  carry it at the head of their column, as the home page does, for the
+  Bookmark and Delete buttons on their posts and for posting; a new post
+  sent from one goes to the feed, where it shows.
+- Check: `go test ./internal/store ./internal/api` (TestBookmarks:
+  the op's rules, the list, a delete, Rebuild; TestNotifications: each
+  why, a code-span mention left out, the thread rule's "after their
+  first post there", paging) and
+  `~/tools/playwright/exe-hub-nav-test.js` against a scratch hub with
+  the Wallet Standard mock (the join window and the Navigation window
+  trading places, the links, the selected row, a bookmark made and
+  taken back, at device pixel ratios 1, 1.5 and 2 and on a phone).
 
 ## Offline — what a reader has seen, kept on the device (built 2026-10-07)
 

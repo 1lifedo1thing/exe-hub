@@ -9,13 +9,15 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <script>const HUB = {{.JS}}, T = (k, v) => { const s = HUB.s[k] === undefined ? k : HUB.s[k]; return v ? s.replace(/\{(\w+)\}/g, (m, n) => n in v ? v[n] : m) : s; };</script>
 {{if .PushKey}}<script>if ("serviceWorker" in navigator && "PushManager" in window && "Notification" in window) document.documentElement.classList.add("push");</script>
-{{end}}{{if .Compose}}<script>document.documentElement.classList.add("js");
+{{end}}{{if or .Compose .Nav}}<script>document.documentElement.classList.add("js");
 // the wallet remembered from the last visit: its class shows the Reply
-// links, and the rule written here shows Delete under that id's own
-// posts — both before layout, so a returning reader's page never jumps
+// links and the Navigation window, and the rule written here shows
+// Delete under that id's own posts — both before layout, so a returning
+// reader's page never jumps. A page with no Post window (a profile)
+// takes the class alone: nothing there can sign.
 try { const w = JSON.parse(localStorage.getItem("exe-hub-wallet") || "null");
   if (w) document.documentElement.classList.add("wallet");
-  if (w && /^[0-9a-f]{16}$/.test(w.id || "")) document.head.appendChild(Object.assign(document.createElement("style"), { id: "own", textContent: '.post[data-au="' + w.id + '"] .del { display: inline-block; } .post[data-au="' + w.id + '"] .foot.own { display: flex; }' }));
+  {{if .Compose}}if (w && /^[0-9a-f]{16}$/.test(w.id || "")) document.head.appendChild(Object.assign(document.createElement("style"), { id: "own", textContent: '.post[data-au="' + w.id + '"] .del { display: inline-block; } .post[data-au="' + w.id + '"] .foot.own { display: flex; }' }));{{end}}
 } catch (e) {}</script>
 {{end}}{{if eq .Page "stats"}}{{template "statshead" .StatsPage}}
 {{end}}<meta name="theme-color" content="#cccccc">
@@ -38,7 +40,7 @@ try { const w = JSON.parse(localStorage.getItem("exe-hub-wallet") || "null");
 {{end}}{{end}}{{if .Published}}<meta property="article:published_time" content="{{.Published}}">
 <meta property="article:author" content="{{.Base}}/u/{{.Post.Author}}">
 {{end}}{{if .Profile}}<meta property="profile:username" content="{{.Profile.Name}}">
-{{end}}{{if eq .Page "search"}}<meta name="robots" content="noindex">{{end}}{{if eq .Page "frame"}}<meta name="robots" content="noindex">
+{{end}}{{if or (eq .Page "search") (eq .Page "notifications") (eq .Page "bookmarks")}}<meta name="robots" content="noindex">{{end}}{{if eq .Page "frame"}}<meta name="robots" content="noindex">
 <base target="_blank">{{end}}{{if eq .Look "paper"}}
 <meta name="color-scheme" content="light dark">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -72,7 +74,7 @@ a.mention { text-decoration: none; }
 .desk { max-width: 640px; margin: 0 auto; }
 @media (min-width: 1060px) {
   .desk { max-width: none; display: flex; align-items: flex-start; justify-content: center; gap: 24px; }
-  .desk .join { flex: 0 0 360px; position: sticky; top: 24px; margin: 0; }
+  .desk .join, .desk > .nav { flex: 0 0 360px; position: sticky; top: 24px; margin: 0; }
   .desk .main { flex: 0 1 640px; min-width: 0; }
   .desk .main > .window:last-child { margin-bottom: 0; }
 }
@@ -84,15 +86,13 @@ a.mention { text-decoration: none; }
 @media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui) {
   .desk .join { display: none; }
 }
-/* on a phone — the stacked desk, the join window above the Post window
-   — a reader signed in with a wallet has joined: the feed comes up
-   under the Post window. The class is the head script's (a wallet that
-   signed in before) and the sign-in's, so a returning reader's join
-   window is gone before layout; Sign Out brings it back. From 1060px it
-   stands at the side, out of the column's way, and stays. */
-@media (max-width: 1059px) {
-  .wallet .desk .join { display: none; }
-}
+/* a reader signed in with a wallet has joined: the join window gives its
+   place to the Navigation window (PLAN.md, The signed-in reader's desk)
+   — at the side from 1060px, and on a phone, where the join window stood
+   above the Post window, a strip of four. The class is the head script's
+   (a wallet that signed in before) and the sign-in's, so a returning
+   reader's join window is gone before layout; Sign Out brings it back. */
+.wallet .desk .join { display: none; }
 /* a thread page is a desk too (PLAN.md, Thread summaries): the Reply
    strip and the thread in the column, and at the column's left, once
    there is room, the side the join window takes on the home page —
@@ -104,11 +104,43 @@ a.mention { text-decoration: none; }
    left the page unbalanced (Livid, the same day); something may stand
    there later. Narrower than 1060px the side waits for the phone
    design: nothing shows. */
+/* The side holds the Navigation window too (2026-10-09), above the
+   Summary, for a signed-in reader: the column then stands where the
+   feed's does. Signed out, a side with no Summary is no side. */
 .desk .side { display: none; }
 @media (min-width: 1060px) {
-  .desk .side { display: block; flex: 0 0 360px; position: sticky; top: 24px; }
-  .desk .side:empty { display: none; }
+  .desk .side:has(> .summary), .wallet .desk .side { display: block; flex: 0 0 360px; position: sticky; top: 24px; }
   .desk .side .window { margin: 0; }
+  .wallet .desk .side .nav ~ .summary { margin-top: 22px; }
+}
+
+/* the Navigation window (PLAN.md, The signed-in reader's desk): Home,
+   Notifications, Bookmarks, Profile, each a 24×24 glyph and its word,
+   the page's own row selected as the @ list's chosen row is. Only a
+   signed-in reader has it. The glyphs are 1-bit pixel art, a black
+   outline round a white face, like the old black-and-white icons; on
+   the selected row the two turn white and the highlight. A row whose
+   address waits for the id (a first sign-in, until the gate names it)
+   is greyed. Narrower than 1060px it is a strip: the four across, each
+   glyph over its word. */
+.nav { display: none; }
+.wallet .nav { display: block; }
+.places { display: flex; flex-direction: column; padding: 3px 0; }
+.place { display: flex; align-items: center; gap: 10px; padding: 5px 12px; color: #262626; text-decoration: none;
+  font-size: 12px; font-weight: bold; line-height: 16px; cursor: default; -webkit-tap-highlight-color: transparent; }
+.place svg { display: block; flex: none; width: 24px; height: 24px; shape-rendering: crispEdges; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) { .place svg { shape-rendering: geometricPrecision; } }
+.place .k { fill: #262626; }
+.place .w { fill: #fff; }
+.place:not([href]) { color: #999; }
+.place:not([href]) .k { fill: #999; }
+.place.on { background: #333399; color: #fff; }
+.place.on .k { fill: #fff; }
+.place.on .w { fill: #333399; }
+@media (max-width: 1059px) {
+  .places { flex-direction: row; padding: 0; }
+  .place { flex: 1 1 0; min-width: 0; flex-direction: column; gap: 2px; padding: 5px 2px 4px; font-size: 11px; line-height: 14px; }
+  .place span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 /* narrower than that, the Summary is a press away (Livid's phone
    design, 2026-09-24): Summarize, a push button between Feed and the
@@ -757,6 +789,23 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
    wears; the word is the danger colour, and the first press arms the
    button red, as the Hub app's does. */
 .foot.own { display: none; }
+/* Bookmark (PLAN.md, The signed-in reader's desk — Bookmarks): on every
+   post's foot line on a page with the Post window, for a signed-in
+   reader; a post with no foot line gets one. Delete's small size, a
+   ribbon glyph hollow when the post is not kept and solid when it is —
+   the rule naming the kept posts on the page stands in a <style
+   id="kept"> the compose script writes. It sits at the right end of the
+   line, Delete (one's own posts) after it. */
+.foot .bm { display: none; align-self: center; margin: 0 0 0 auto; min-width: 0; height: auto; padding: 3px 8px; }
+.wallet .foot .bm { display: inline-flex; align-items: center; justify-content: center; }
+.wallet .foot.own:has(.bm) { display: flex; }
+.foot .bm + .del { margin-left: 0; }
+.foot .bm svg { display: block; width: 8px; height: 10px; shape-rendering: crispEdges; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) { .foot .bm svg { shape-rendering: geometricPrecision; } }
+.foot .bm .k { fill: currentColor; }
+.foot .bm .w { fill: #fff; }
+/* why a post is among one's notifications, where "in reply to" stands */
+.meta .why { color: #333399; }
 .foot .del { display: none; margin: 0 0 0 auto; min-width: 0; height: auto;
   padding: 1px 8px; font-size: 10px; font-family: inherit; color: #7a1010; }
 .foot .del.armed { background: #cc3333; color: #fff;
@@ -985,6 +1034,7 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
   </div></div>
 </div>
 {{end}}
+{{template "nav" .}}
 <div class="main">
 {{with .Compose}}{{template "compose" .}}{{end}}
 {{/* the feed is the home page itself: nothing to close, no close box
@@ -1003,7 +1053,7 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 </div>
 {{else if eq .Page "thread"}}
 <div class="desk thread">
-<div class="side" id="side">{{with .Summary}}{{template "summary" .}}{{end}}</div>
+<div class="side" id="side">{{template "nav" .}}{{with .Summary}}{{template "summary" .}}{{end}}</div>
 <div class="main">
 {{with .Compose}}{{template "compose" .}}{{end}}
 <div class="window">
@@ -1039,6 +1089,9 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
   </div>
 </div>
 {{else if eq .Page "profile"}}
+<div class="desk">
+{{template "nav" .}}
+<div class="main">
 <div class="window">
   <div class="titlebar"><a class="tbox" href="/{{.Q}}" title="{{T "back"}}" aria-label="{{T "back"}}"></a><span class="stripe"></span><span class="title"><a href="/{{.Q}}">{{.Host}}</a></span><span class="stripe"></span></div>
   <div class="frame">
@@ -1057,6 +1110,25 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
     {{if .Posts}}{{range .Posts}}{{template "post" .}}{{end}}{{else}}<div class="pad">{{T "noposts"}}</div>{{end}}
     <div class="pager">{{template "pager" .}}</div>
   </div>
+</div>
+</div>
+</div>
+{{else if or (eq .Page "notifications") (eq .Page "bookmarks")}}
+<div class="desk">
+{{template "nav" .}}
+<div class="main">
+{{with .Compose}}{{template "compose" .}}{{end}}
+<div class="window">
+  <div class="titlebar"><a class="tbox" href="/{{.Q}}" title="{{T "back"}}" aria-label="{{T "back"}}"></a><span class="stripe"></span><span class="title">{{T .Page}}</span><span class="stripe"></span></div>
+  <div class="frame">
+    {{template "saved"}}
+    {{if or .Prev .Next}}<div class="pager top">{{template "pager" .}}</div>{{end}}
+    {{if .Posts}}{{range .Posts}}{{template "post" .}}{{end}}{{else}}<div class="pad">{{T (print "no" .Page)}}</div>{{end}}
+    {{if or .Prev .Next}}<div class="pager">{{template "pager" .}}</div>{{end}}
+    <div class="statusbar"><span>{{.Message}}</span></div>
+  </div>
+</div>
+</div>
 </div>
 {{else if eq .Page "stats"}}
 {{template "stats" .StatsPage}}
@@ -2228,8 +2300,11 @@ document.addEventListener("change", e => {
     // script), so it shows them from the first paint
     remember({ name: me.name, address: me.address, id: st.v.profile,
       pname: st.profile && st.profile.name || "", ava: st.profile && st.profile.avatar || "" });
-    // and the Notify subscription follows it (the Notify script listens)
+    // and the Notify subscription follows it (the Notify script listens),
+    // and the Navigation window's links, and the kept posts
     document.dispatchEvent(new CustomEvent("exe-hub-id", { detail: st.v.profile }));
+    if (window.hubNav) hubNav(st.v.profile);
+    keptOf(st.v.profile);
     q(".id").textContent = st.v.profile;
     q(".id").title = me.address;
     q(".name").textContent = st.profile && st.profile.name ? st.profile.name : T("noname");
@@ -2315,7 +2390,7 @@ document.addEventListener("change", e => {
     // — and its who line, drawn already, stands until the gate's answer
     // redraws it the same or with what changed since
     const before = recall(), same = before && before.address === me.address;
-    if (!same) { showOwn(""); disarm(); }
+    if (!same) { showOwn(""); disarm(); keptOf(""); if (window.hubNav) hubNav(""); }
     remember(same ? Object.assign(before, { name: me.name }) : { name: me.name, address: me.address });
     root.classList.add("wallet");
     if (!same || !before.id) {
@@ -2332,6 +2407,8 @@ document.addEventListener("change", e => {
     if (target) { target = null; showTarget(); } // the Reply links go with the wallet, and so does their aim
     showOwn(""); // and so do the Delete buttons
     disarm();
+    keptOf(""); // and the kept posts, and the Navigation window's links
+    if (window.hubNav) hubNav("");
     remember(null);
     root.classList.remove("wallet");
     meAva("");
@@ -2757,6 +2834,74 @@ document.addEventListener("change", e => {
       render();
     }
   });
+  // ---- bookmarks (PLAN.md, The signed-in reader's desk — Bookmarks) ----
+  // Which posts the reader keeps: the hub's list of their ids, remembered
+  // on this browser with the id it is for, so a visit draws them solid
+  // before the hub has answered. One rule names the kept posts on the
+  // page (<style id="kept">), so a post the live page swaps in keeps its
+  // look. A press signs one post.bookmark with the state turned over —
+  // one prompt, as Delete is — the button turning at once and back if
+  // the hub refuses; a post taken off the Bookmarks page stays there,
+  // hollow, until the page loads again.
+  const KEPT = "exe-hub-bookmarks";
+  const keptCSS = document.head.appendChild(Object.assign(document.createElement("style"), { id: "kept" }));
+  let kept = new Set(), keptFor = null;
+  function showKept() {
+    const on = [];
+    for (const b of document.querySelectorAll(".post[id] .bm")) {
+      const id = b.closest(".post").id, k = kept.has(id);
+      b.setAttribute("aria-pressed", k);
+      if (k) on.push('[id="' + id + '"]');
+    }
+    keptCSS.textContent = on.length ? ".post:is(" + on.join(",") + ") .bm .w { fill: currentColor; }" : "";
+  }
+  const keepKept = () => { try { keptFor ? localStorage.setItem(KEPT, JSON.stringify({ id: keptFor, posts: [...kept] })) : localStorage.removeItem(KEPT); } catch (e) {} };
+  function keptOf(id) {
+    id = /^[0-9a-f]{16}$/.test(id || "") ? id : "";
+    if (id !== keptFor) {
+      keptFor = id;
+      kept = new Set();
+      try { const k = JSON.parse(localStorage.getItem(KEPT) || "null"); if (id && k && k.id === id && Array.isArray(k.posts)) kept = new Set(k.posts); } catch (e) {}
+      if (!id) keepKept();
+      showKept();
+    }
+    if (!id) return;
+    getJSON("/v1/profile/" + id + "/bookmarks/ids").then(({ r, out }) => {
+      // a press in flight has the say until it lands
+      if (!r.ok || keptFor !== id || busy || !Array.isArray(out.posts)) return;
+      kept = new Set(out.posts);
+      keepKept();
+      showKept();
+    }).catch(() => {});
+  }
+  { const was = recall(); keptOf(was && was.id); }
+  document.addEventListener("pointerover", e => {
+    const b = e.target instanceof Element && e.target.closest("button.bm"), post = b && b.closest(".post");
+    if (post) b.title = T(kept.has(post.id) ? "bookmark.remove" : "bookmark");
+  });
+  document.addEventListener("click", async e => {
+    const b = e.target instanceof Element && e.target.closest("button.bm");
+    const post = b && b.closest(".post");
+    if (!post || !me || !keptFor || busy) return;
+    const who = me, id = post.id, on = !kept.has(id);
+    busy = true;
+    render();
+    on ? kept.add(id) : kept.delete(id);
+    showKept();
+    b.title = T(on ? "bookmark.remove" : "bookmark");
+    try {
+      await sendOp("post.bookmark", { post: id, on }, tell, null, who);
+      keepKept();
+      done(T(on ? "bookmarked" : "unbookmarked"));
+    } catch (err) {
+      on ? kept.delete(id) : kept.add(id);
+      showKept();
+      flash = err.message;
+    } finally {
+      busy = false;
+      render();
+    }
+  });
   // The post as the window stands: the words, the reply it answers, and
   // what is attached: the window's pictures, or the pad's drawing. Post
   // sends it, and so does the pad's Send, so the words, the mentions and
@@ -2800,7 +2945,7 @@ document.addEventListener("change", e => {
     if (me === who && verdict && verdict.cooldown) until = Date.now() + verdict.cooldown * 1000;
     // a live page brings it in (a reply is landed on); a static one loads again, a thread at the new reply
     if (!window.hubRefresh) {
-      if (!replyTo) { location.reload(); return false; }
+      if (!replyTo) { if (box.dataset.away !== undefined) location.href = feedHref(); else location.reload(); return false; }
       const q = new URLSearchParams(location.search); q.delete("page"); q.set("at", id); // the reply's page, found by the server
       location.href = location.pathname + "?" + q + "#" + id; return false;
     }
@@ -3712,9 +3857,9 @@ document.addEventListener("change", e => {
 {{define "fpager"}}{{if .PrevHref}}<a class="btn prev back" href="{{.PrevHref}}" target="_self">{{template "arrow"}}<span>{{T "prev"}}</span></a>{{end}}<span class="stats">{{T "replies.range" "a" .From "b" .To "n" .Count}}</span>{{if .NextHref}}<a class="btn next fwd" href="{{.NextHref}}" target="_self"><span>{{T "next"}}</span>{{template "arrow-r"}}</a>{{end}}{{end}}
 {{define "tpager"}}{{if .PrevHref}}<a class="btn prev back" href="{{.PrevHref}}">{{template "arrow"}}<span>{{T "prev"}}</span></a>{{end}}<span class="stats">{{T "replies.range" "a" .From "b" .To "n" .Count}}</span>{{if .NextHref}}<a class="btn next fwd" href="{{.NextHref}}"><span>{{T "next"}}</span>{{template "arrow-r"}}</a>{{end}}{{end}}
 
-{{define "cursors"}}{{if eq .Page "search"}}/search?q={{.Query}}&amp;{{else if eq .Page "profile"}}/u/{{.Profile.ID}}?{{else}}/?{{end}}{{if .Lang}}lang={{.Lang}}&amp;{{end}}{{end}}
+{{define "cursors"}}{{if eq .Page "search"}}/search?q={{.Query}}&amp;{{else if eq .Page "profile"}}/u/{{.Profile.ID}}?{{else if or (eq .Page "notifications") (eq .Page "bookmarks")}}/u/{{.NavFor}}/{{.Page}}?{{else}}/?{{end}}{{if .Lang}}lang={{.Lang}}&amp;{{end}}{{end}}
 
-{{define "counts"}}{{if eq .Page "search"}}{{T "matches" "n" .Count}}{{else if eq .Page "profile"}}{{if .Since}}{{.Count}}{{else}}{{len .Posts}}{{end}} {{T "posts"}}{{else}}<span class="m"><span data-n="members">{{.Members}}</span> {{T "members"}} · </span><span data-n="posts">{{.Count}}</span> {{T "posts"}}{{if .StatsOn}} · <a href="/stats" title="{{T "online.title"}}"><span data-n="online">{{.Online}}</span> {{T "online"}}</a>{{end}}{{end}}{{end}}
+{{define "counts"}}{{if eq .Page "search"}}{{T "matches" "n" .Count}}{{else if or (eq .Page "notifications") (eq .Page "bookmarks")}}{{else if eq .Page "profile"}}{{if .Since}}{{.Count}}{{else}}{{len .Posts}}{{end}} {{T "posts"}}{{else}}<span class="m"><span data-n="members">{{.Members}}</span> {{T "members"}} · </span><span data-n="posts">{{.Count}}</span> {{T "posts"}}{{if .StatsOn}} · <a href="/stats" title="{{T "online.title"}}"><span data-n="online">{{.Online}}</span> {{T "online"}}</a>{{end}}{{end}}{{end}}
 
 {{define "find"}}<form class="find" id="find" action="/search" method="get">{{if .Lang}}<input type="hidden" name="lang" value="{{.Lang}}">{{end}}<input type="text" name="q" value="{{.Query}}" placeholder="{{T "find"}}" aria-label="{{T "find"}}" maxlength="200" enterkeyhint="search" autocomplete="off"><button class="btn" type="submit">{{T "search"}}</button>{{if .PushKey}}<button type="button" class="btn bell" id="notify" aria-pressed="false" title="{{T "notify.off"}}" data-key="{{.PushKey}}" disabled>{{template "bell"}}</button>{{end}}{{template "lang" .}}</form>
 {{end}}
@@ -3729,7 +3874,7 @@ document.addEventListener("change", e => {
      the stripes run the whole bar (Livid, 2026-10-09) */}}
 {{define "compose"}}<div class="window composer">
 <div class="titlebar"><span class="stripe"></span><span class="title">{{if .ReplyTo}}{{T "reply"}}{{else}}{{T "post"}}{{end}}</span><span class="stripe"></span></div>
-<div class="frame"><div class="compose" id="compose"{{if .ReplyTo}} data-reply-to="{{.ReplyTo}}"{{end}}>
+<div class="frame"><div class="compose" id="compose"{{if .ReplyTo}} data-reply-to="{{.ReplyTo}}"{{end}}{{if .Away}} data-away{{end}}>
   <div class="out">
     <div class="row pick-off"><span class="grow note">{{if .ReplyTo}}{{T "compose.note.reply"}}{{else}}{{T "compose.note.post"}}{{end}}</span><button type="button" class="btn signin">{{T "signin"}}</button></div>
     <div class="row picker" hidden></div>
@@ -3788,20 +3933,69 @@ document.addEventListener("change", e => {
      already has (Reply in a thread, the reply count in a feed) or one of
      its own. Down for everyone until a script says whose posts these are:
      see the .del and .foot.own rules. */}}
+{{/* Bookmark, on a page with the Post window (PLAN.md, The signed-in
+     reader's desk — Bookmarks): the ribbon is hollow, and solid for a
+     post the reader keeps — the rule in <style id="kept"> fills .w */}}
+{{define "keep"}}{{if .Keep}}<button type="button" class="btn bm" aria-label="{{T "bookmark"}}" title="{{T "bookmark"}}"><svg viewBox="0 0 8 10" width="8" height="10" aria-hidden="true"><path class="w" d="M1 1h6v1h-6zM1 2h6v1h-6zM1 3h6v1h-6zM1 4h6v1h-6zM1 5h6v1h-6zM1 6h6v1h-6zM1 7h2v1h-2zM5 7h2v1h-2zM1 8h1v1h-1zM6 8h1v1h-1z"/><path class="k" d="M0 0h8v1h-8zM0 1h1v1h-1zM7 1h1v1h-1zM0 2h1v1h-1zM7 2h1v1h-1zM0 3h1v1h-1zM7 3h1v1h-1zM0 4h1v1h-1zM7 4h1v1h-1zM0 5h1v1h-1zM7 5h1v1h-1zM0 6h1v1h-1zM7 6h1v1h-1zM0 7h1v1h-1zM3 7h2v1h-2zM7 7h1v1h-1zM0 8h1v1h-1zM2 8h1v1h-1zM5 8h1v1h-1zM7 8h1v1h-1zM0 9h2v1h-2zM6 9h2v1h-2z"/></svg></button>{{end}}{{end}}
+
+{{/* The Navigation window (PLAN.md, The signed-in reader's desk): a
+     signed-in reader's Home, Notifications, Bookmarks and Profile. The
+     addresses need the reader's id, which only the browser knows: the
+     script right after the window writes them from the wallet remembered
+     here, before the first paint, and selects the page's own row; the
+     compose script calls hubNav again when the gate names an id, and at
+     Sign Out. data-page is the row this page is; data-for, the id the page
+     is for (a profile, Notifications, Bookmarks), whose row is selected
+     only when it is the reader's own. */}}
+{{define "nav"}}<div class="window nav" id="nav">
+  <div class="titlebar"><span class="stripe"></span><span class="title">{{T "nav"}}</span><span class="stripe"></span></div>
+  <div class="frame"><nav class="places" aria-label="{{T "nav"}}" data-page="{{.NavOn}}" data-for="{{.NavFor}}" data-q="{{.Q}}">
+    <a class="place" data-to="home" href="/{{.Q}}">{{template "g-home"}}<span>{{T "nav.home"}}</span></a>
+    <a class="place" data-to="notifications">{{template "g-bell"}}<span>{{T "nav.notifications"}}</span></a>
+    <a class="place" data-to="bookmarks">{{template "g-ribbon"}}<span>{{T "nav.bookmarks"}}</span></a>
+    <a class="place" data-to="profile">{{template "g-person"}}<span>{{T "nav.profile"}}</span></a>
+  </nav></div>
+</div>
+<script>
+window.hubNav = id => {
+  const nav = document.querySelector("#nav .places");
+  if (!nav) return;
+  const ok = /^[0-9a-f]{16}$/.test(id || "");
+  for (const a of nav.querySelectorAll(".place")) {
+    const to = a.dataset.to;
+    if (to !== "home") {
+      if (ok) a.href = "/u/" + id + (to === "profile" ? "" : "/" + to) + nav.dataset.q;
+      else a.removeAttribute("href");
+    }
+    const on = to === nav.dataset.page && (to === "home" || (ok && nav.dataset.for === id));
+    a.classList.toggle("on", on);
+    if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+  }
+};
+try { const w = JSON.parse(localStorage.getItem("exe-hub-wallet") || "null"); hubNav(w && w.id); } catch (e) { hubNav(""); }
+</script>{{end}}
+
+{{/* the Navigation window's glyphs: 24×24, 1-bit — .k the black outline,
+     .w the white face */}}
+{{define "g-home"}}<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path class="w" d="M11 3h2v1h-2zM10 4h4v1h-4zM9 5h6v1h-6zM8 6h8v1h-8zM7 7h10v1h-10zM6 8h12v1h-12zM5 9h14v1h-14zM4 10h16v1h-16zM3 11h18v1h-18zM4 12h16v1h-16zM4 13h16v1h-16zM4 14h16v1h-16zM4 15h3v1h-3zM11 15h3v1h-3zM18 15h2v1h-2zM4 16h3v1h-3zM8 16h2v1h-2zM11 16h3v1h-3zM15 16h2v1h-2zM18 16h2v1h-2zM4 17h3v1h-3zM8 17h2v1h-2zM11 17h3v1h-3zM18 17h2v1h-2zM4 18h3v1h-3zM8 18h2v1h-2zM11 18h9v1h-9zM4 19h3v1h-3zM8 19h1v1h-1zM11 19h9v1h-9zM4 20h3v1h-3zM8 20h2v1h-2zM11 20h9v1h-9zM4 21h3v1h-3zM8 21h2v1h-2zM11 21h9v1h-9z"/><path class="k" d="M11 2h2v1h-2zM10 3h1v1h-1zM13 3h1v1h-1zM17 3h2v1h-2zM9 4h1v1h-1zM14 4h1v1h-1zM17 4h2v1h-2zM8 5h1v1h-1zM15 5h1v1h-1zM17 5h2v1h-2zM7 6h1v1h-1zM16 6h3v1h-3zM6 7h1v1h-1zM17 7h2v1h-2zM5 8h1v1h-1zM18 8h1v1h-1zM4 9h1v1h-1zM19 9h1v1h-1zM3 10h1v1h-1zM20 10h1v1h-1zM2 11h1v1h-1zM21 11h1v1h-1zM1 12h3v1h-3zM20 12h3v1h-3zM3 13h1v1h-1zM20 13h1v1h-1zM3 14h1v1h-1zM20 14h1v1h-1zM3 15h1v1h-1zM7 15h4v1h-4zM14 15h4v1h-4zM20 15h1v1h-1zM3 16h1v1h-1zM7 16h1v1h-1zM10 16h1v1h-1zM14 16h1v1h-1zM17 16h1v1h-1zM20 16h1v1h-1zM3 17h1v1h-1zM7 17h1v1h-1zM10 17h1v1h-1zM14 17h4v1h-4zM20 17h1v1h-1zM3 18h1v1h-1zM7 18h1v1h-1zM10 18h1v1h-1zM20 18h1v1h-1zM3 19h1v1h-1zM7 19h1v1h-1zM9 19h2v1h-2zM20 19h1v1h-1zM3 20h1v1h-1zM7 20h1v1h-1zM10 20h1v1h-1zM20 20h1v1h-1zM3 21h1v1h-1zM7 21h1v1h-1zM10 21h1v1h-1zM20 21h1v1h-1zM3 22h18v1h-18z"/></svg>{{end}}
+{{define "g-bell"}}<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path class="w" d="M11 3h2v1h-2zM9 4h6v1h-6zM8 5h8v1h-8zM8 6h8v1h-8zM7 7h10v1h-10zM7 8h10v1h-10zM7 9h10v1h-10zM7 10h10v1h-10zM7 11h10v1h-10zM6 12h12v1h-12zM6 13h12v1h-12zM5 14h14v1h-14zM4 15h16v1h-16zM3 16h18v1h-18zM11 18h2v1h-2zM11 19h2v1h-2z"/><path class="k" d="M11 1h2v1h-2zM10 2h4v1h-4zM9 3h2v1h-2zM13 3h2v1h-2zM8 4h1v1h-1zM15 4h1v1h-1zM7 5h1v1h-1zM16 5h1v1h-1zM7 6h1v1h-1zM16 6h1v1h-1zM6 7h1v1h-1zM17 7h1v1h-1zM6 8h1v1h-1zM17 8h1v1h-1zM6 9h1v1h-1zM17 9h1v1h-1zM6 10h1v1h-1zM17 10h1v1h-1zM6 11h1v1h-1zM17 11h1v1h-1zM5 12h1v1h-1zM18 12h1v1h-1zM5 13h1v1h-1zM18 13h1v1h-1zM4 14h1v1h-1zM19 14h1v1h-1zM3 15h1v1h-1zM20 15h1v1h-1zM2 16h1v1h-1zM21 16h1v1h-1zM2 17h20v1h-20zM10 18h1v1h-1zM13 18h1v1h-1zM10 19h1v1h-1zM13 19h1v1h-1zM11 20h2v1h-2z"/></svg>{{end}}
+{{define "g-ribbon"}}<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path class="w" d="M7 3h10v14h-10zM7 17h4v1h-4zM13 17h4v1h-4zM7 18h3v1h-3zM14 18h3v1h-3zM7 19h2v1h-2zM15 19h2v1h-2zM7 20h1v1h-1zM16 20h1v1h-1z"/><path class="k" d="M6 2h12v1h-12zM6 3h1v20h-1zM17 3h1v20h-1zM11 17h2v1h-2zM10 18h1v1h-1zM13 18h1v1h-1zM9 19h1v1h-1zM14 19h1v1h-1zM8 20h1v1h-1zM15 20h1v1h-1zM7 21h1v1h-1zM16 21h1v1h-1z"/></svg>{{end}}
+{{define "g-person"}}<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path class="w" d="M9 3h6v1h-6zM8 4h8v4h-8zM9 8h6v1h-6zM8 12h8v1h-8zM6 13h12v1h-12zM5 14h14v1h-14zM4 15h16v2h-16zM3 17h18v3h-18z"/><path class="k" d="M9 2h6v1h-6zM8 3h1v1h-1zM15 3h1v1h-1zM7 4h1v4h-1zM16 4h1v4h-1zM8 8h1v1h-1zM15 8h1v1h-1zM9 9h6v1h-6zM8 11h8v1h-8zM6 12h2v1h-2zM16 12h2v1h-2zM5 13h1v1h-1zM18 13h1v1h-1zM4 14h1v1h-1zM19 14h1v1h-1zM3 15h1v2h-1zM20 15h1v2h-1zM2 17h1v3h-1zM21 17h1v3h-1zM2 20h20v1h-20z"/></svg>{{end}}
+
 {{define "del"}}<button type="button" class="btn del" title="{{T "delete.title"}}">{{T "delete"}}</button>{{end}}
 
 {{define "post"}}<div class="post{{if .ReplyTo}} reply{{end}}{{if gt .Depth 1}} deep{{end}}{{if .Quote}} qhead{{end}}{{if .QuoteRun}} qrun{{end}}" id="{{.ID}}" data-au="{{.Author}}"{{if .Listed}} data-href="/p/{{.ID}}{{.Q}}"{{end}}{{if gt .Depth 1}} style="--d:{{.Depth}}"{{end}}>
   {{with .Quote}}<a class="quote" href="/p/{{.ID}}{{$.Q}}"><b>{{.Name}}</b>{{if .Text}} {{.Text}}{{end}}</a>{{end}}
   <a class="av" href="/u/{{.Author}}{{.Q}}">{{if .Avatar}}<img src="/v1/embed/{{.Avatar}}" alt="">{{else}}<img class="idn" src="/v1/identicon/{{.Author}}.svg" alt="">{{end}}</a>
   <div>
-    <div class="meta"><a href="/u/{{.Author}}{{.Q}}"><b>{{if .AuthorName}}{{.AuthorName}}{{else}}{{.Author}}{{end}}</b></a> <span class="mono">{{.Author}}</span> · <a href="/p/{{.ID}}{{.Q}}"><time datetime="{{.Stamp}}">{{.When}}</time></a>{{if .ReplyTo}}{{if .InThread}}{{if gt .Depth 1}} · <a href="{{.ParentHref}}">{{T "inreply.name" "name" .ParentName}}</a>{{end}}{{else}}{{if not (or .Quote .QuoteRun)}} · <a href="/p/{{.ReplyTo}}{{.Q}}">{{T "inreply"}}</a>{{end}}{{end}}{{end}}</div>
+    <div class="meta"><a href="/u/{{.Author}}{{.Q}}"><b>{{if .AuthorName}}{{.AuthorName}}{{else}}{{.Author}}{{end}}</b></a> <span class="mono">{{.Author}}</span> · <a href="/p/{{.ID}}{{.Q}}"><time datetime="{{.Stamp}}">{{.When}}</time></a>{{if .Why}} · <a class="why" href="/p/{{if .ReplyTo}}{{.ReplyTo}}{{else}}{{.ID}}{{end}}{{.Q}}">{{T (print "why." .Why)}}</a>{{else if .ReplyTo}}{{if .InThread}}{{if gt .Depth 1}} · <a href="{{.ParentHref}}">{{T "inreply.name" "name" .ParentName}}</a>{{end}}{{else}}{{if not (or .Quote .QuoteRun)}} · <a href="/p/{{.ReplyTo}}{{.Q}}">{{T "inreply"}}</a>{{end}}{{end}}{{end}}</div>
     {{if .Text}}{{with .Tr}}<div class="text" lang="{{.Lang}}"{{if .Orig}} hidden{{end}}>{{.HTML}}</div>{{end}}<div class="text"{{if .Lang}} lang="{{.Lang}}"{{end}}{{if and .Tr (not .Tr.Orig)}} hidden{{end}}>{{.HTML}}</div>{{with .Tr}}<div class="trl"><span{{if .Orig}} hidden{{end}}>{{.Note}} · </span><a class="tro" role="button" href="/p/{{$.ID}}{{if .Orig}}{{$.Q}}{{else}}?lang=orig{{end}}" data-other="{{if .Orig}}{{.Show}}{{else}}{{.Back}}{{end}}">{{if .Orig}}{{.Back}}{{else}}{{.Show}}{{end}}</a></div>{{end}}{{end}}
     {{if .Card}}<div class="card"><a class="cm" href="{{.Card.URL}}" target="_blank" rel="noopener nofollow">{{if .Card.Image}}<span class="ci"><img src="/v1/embed/{{.Card.Image}}" alt="" loading="lazy"></span>{{end}}<span class="cb"><span class="ct">{{.Card.Title}}</span>{{if .Card.Desc}}<span class="cd">{{.Card.Desc}}</span>{{end}}<span class="ch">{{.Card.Host}}</span></span></a>{{if .Card.Archive}}<a class="arch" href="{{.Card.Archive}}" target="_blank" rel="noopener nofollow">{{T "archived"}}{{with .Card.ArchiveDate}} · {{.}}{{end}}</a>{{end}}</div>{{end}}
     {{with .PostCard}}<div class="card qcard"><a class="cm" href="/p/{{.ID}}{{$.Q}}">{{if .Image}}<span class="ci"><img src="/v1/embed/{{.Image}}" alt="" loading="lazy"></span>{{end}}<span class="cb"><span class="qh"><span class="qav">{{if .Avatar}}<img src="/v1/embed/{{.Avatar}}" alt="">{{else}}<img class="idn" src="/v1/identicon/{{.Author}}.svg" alt="">{{end}}</span><b>{{.Name}}</b><span class="mono">{{.Author}}</span><span class="qw">· <time datetime="{{.Stamp}}">{{.When}}</time></span></span>{{if .Text}}<span class="qt">{{.Text}}</span>{{end}}</span></a></div>{{end}}
     {{if or .Images .Pictures .Videos .Sounds .Files .Pages}}<div class="embeds">{{range .Images}}{{if .Drawing}}<div class="drawing"><a class="pic" href="/v1/embed/{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "picture"}}{{end}}"><img class="draw" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" data-src="/v1/embed/{{.CID}}" data-w="{{.Width}}" data-h="{{.Height}}" style="width:{{.Width}}px;height:{{.Height}}px" alt="{{.Alt}}"><noscript><img class="draw" src="/v1/embed/{{.CID}}" width="{{.Width}}" height="{{.Height}}" loading="lazy" alt=""></noscript></a><button type="button" class="btn again">{{T "replay"}}</button></div>{{else}}<a class="pic" href="/v1/embed/{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "picture"}}{{end}}"><img src="/v1/embed/{{.CID}}" alt="{{.Alt}}"></a>{{end}}{{end}}{{range .Pictures}}<a class="pic" href="/v1/embed/{{.CID}}" data-name="{{.Name}}" title="{{.URL}}"><img src="/v1/embed/{{.CID}}" alt=""></a>{{end}}{{range .Videos}}<div class="vid"{{if .Loop}} data-loop{{end}} style="{{.Box}}"><video src="/v1/embed/{{.CID}}"{{if .Poster}} poster="/v1/embed/{{.Poster}}"{{end}}{{if .Loop}} autoplay loop muted playsinline preload="auto"{{else}} controls playsinline preload="{{if .Poster}}none{{else}}metadata{{end}}"{{end}}{{if .Alt}} aria-label="{{.Alt}}"{{end}}></video></div>{{end}}{{range .Sounds}}<div class="aud">{{if .Poster}}<img class="wave" src="/v1/embed/{{.Poster}}" alt="">{{end}}<audio controls preload="none" src="/v1/embed/{{.CID}}"></audio><span class="afoot">{{if .Filename}}{{.Filename}}{{else}}{{T "sound"}}{{end}}{{with .Length}} · {{.}}{{end}}</span></div>{{end}}{{range .Pages}}<div><a class="page" href="/v1/embed/{{.CID}}" data-cid="{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "page"}}{{end}}">{{if .Filename}}{{.Filename}}{{else}}{{T "page"}}{{end}}</a><a class="pagedl" href="/v1/embed/{{.CID}}" download>{{T "download"}}</a></div>{{end}}{{range .Files}}<a class="file" href="/v1/embed/{{.CID}}">{{if .Filename}}{{.Filename}}{{else}}{{.CID}}{{end}} ({{.MIME}})</a>{{end}}</div>{{end}}
-    {{if .InThread}}<div class="foot re"><a class="rlink" role="button" href="/p/{{.ID}}{{.Q}}">{{T "reply"}}</a>{{template "del" .}}</div>
-    {{else if and (not .ReplyTo) .Replies}}<div class="foot"><a class="count" href="/p/{{.ID}}{{.Q}}">{{T "replies" "n" .Replies}} ▸</a>{{with .Latest}}<a class="latest" href="{{.Href}}"><b>{{.Name}}</b> {{.Text}}</a>{{end}}{{template "del" .}}</div>
-    {{else}}<div class="foot own">{{template "del" .}}</div>{{end}}
+    {{if .InThread}}<div class="foot re"><a class="rlink" role="button" href="/p/{{.ID}}{{.Q}}">{{T "reply"}}</a>{{template "keep" .}}{{template "del" .}}</div>
+    {{else if and (not .ReplyTo) .Replies}}<div class="foot"><a class="count" href="/p/{{.ID}}{{.Q}}">{{T "replies" "n" .Replies}} ▸</a>{{with .Latest}}<a class="latest" href="{{.Href}}"><b>{{.Name}}</b> {{.Text}}</a>{{end}}{{template "keep" .}}{{template "del" .}}</div>
+    {{else}}<div class="foot own">{{template "keep" .}}{{template "del" .}}</div>{{end}}
   </div>
 </div>
 {{end}}

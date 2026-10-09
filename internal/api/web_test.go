@@ -299,7 +299,7 @@ func TestWebThreadProfile(t *testing.T) {
 	// page; the post heading the page has none (the window answers it as
 	// it stands), and the window has the line that names the reply, hidden
 	for _, id := range []string{reply, deep} {
-		if !strings.Contains(body, `<div class="foot re"><a class="rlink" role="button" href="/p/`+id+`">Reply</a><button type="button" class="btn del"`) {
+		if !strings.Contains(body, `<div class="foot re"><a class="rlink" role="button" href="/p/`+id+`">Reply</a><button type="button" class="btn bm"`) {
 			t.Errorf("reply %s lacks its Reply link", id)
 		}
 	}
@@ -1470,6 +1470,9 @@ func TestWebDelete(t *testing.T) {
 	h := s.Handler()
 
 	del := `<button type="button" class="btn del" title="Delete this post">Delete</button>`
+	// the Bookmark button stands before it on a page with the Post window
+	// (PLAN.md, The signed-in reader's desk)
+	keep := `</svg></button>` + del
 	for _, path := range []string{"/", "/p/" + root} {
 		_, body := get(t, h, path)
 		if got, want := strings.Count(body, del), 1+strings.Count(path, "/p/"); got != want {
@@ -1496,7 +1499,7 @@ func TestWebDelete(t *testing.T) {
 	// in a thread, the reply count on a root — and on one of its own where
 	// the post has neither
 	_, thread := get(t, h, "/p/"+root)
-	if !strings.Contains(thread, `<a class="rlink" role="button" href="/p/`+reply+`">Reply</a>`+del+`</div>`) {
+	if i := strings.Index(thread, `<a class="rlink" role="button" href="/p/`+reply+`">Reply</a><button type="button" class="btn bm"`); i < 0 || !strings.HasPrefix(thread[i+strings.Index(thread[i:], `</svg></button>`):], keep+`</div>`) {
 		t.Error("the reply's Delete button does not close its Reply line")
 	}
 	// on the feed, the root's line is its reply count and the Delete button
@@ -1504,10 +1507,10 @@ func TestWebDelete(t *testing.T) {
 	ingest(t, s, priv, pub, 3, "post.create", map[string]any{"text": "a post nobody answered"})
 	_, feed := get(t, h, "/")
 	i := strings.Index(feed, `<div class="foot"><a class="count"`)
-	if i < 0 || !strings.HasSuffix(feed[i:i+strings.Index(feed[i:], "</div>")+6], del+`</div>`) {
+	if i < 0 || !strings.HasSuffix(feed[i:i+strings.Index(feed[i:], "</div>")+6], keep+`</div>`) {
 		t.Error("the Delete button does not close the count line")
 	}
-	if !strings.Contains(feed, `<div class="foot own">`+del+`</div>`) {
+	if !strings.Contains(feed, `<div class="foot own"><button type="button" class="btn bm"`) || !strings.Contains(feed, keep+`</div>`) {
 		t.Error("a post with no foot line of its own does not get one for Delete")
 	}
 	if got := strings.Count(feed, `class="foot`); got != 2 {
@@ -1789,7 +1792,7 @@ func TestWebDeskColumnsAreTheHubsOwn(t *testing.T) {
 	_, body := get(t, s.Handler(), "/")
 	// the two columns and what places them are the hub's
 	for _, want := range []string{
-		`.desk .join { flex: 0 0 360px; position: sticky; top: 24px; margin: 0; }`,
+		`.desk .join, .desk > .nav { flex: 0 0 360px; position: sticky; top: 24px; margin: 0; }`,
 		`.desk .main { flex: 0 1 640px; min-width: 0; }`,
 	} {
 		if !strings.Contains(body, want) {
@@ -2082,7 +2085,7 @@ func TestWebSummaryWindow(t *testing.T) {
 	}
 	h := s.Handler()
 	_, body := get(t, h, "/p/"+root)
-	if strings.Contains(body, `class="window summary"`) || !strings.Contains(body, `<div class="desk thread">`+"\n"+`<div class="side" id="side"></div>`+"\n"+`<div class="main">`) || strings.Contains(body, `class="btn spark"`) {
+	if strings.Contains(body, `class="window summary"`) || !strings.Contains(body, `<div class="desk thread">`+"\n"+`<div class="side" id="side"><div class="window nav" id="nav">`) || !strings.Contains(body, `</script></div>`+"\n"+`<div class="main">`) || strings.Contains(body, `class="btn spark"`) {
 		t.Error("a thread without a summary carries the window or the sparkle, or no desk with its empty side")
 	}
 	if err := s.St.SetLang(root, "en", "m", true); err != nil {
@@ -2116,7 +2119,7 @@ func TestWebSummaryWindow(t *testing.T) {
 	if j := strings.Index(body, `</div>`+"\n"+`{{`); j >= 0 {
 		t.Error("template text leaked")
 	}
-	if !(i < strings.Index(body, `data-live="thread"`)) || !strings.Contains(body, `<div class="desk thread">`+"\n"+`<div class="side" id="side"><div class="window summary" lang="en">`) {
+	if !(i < strings.Index(body, `data-live="thread"`)) || !strings.Contains(body, `<div class="desk thread">`+"\n"+`<div class="side" id="side"><div class="window nav" id="nav">`) || !strings.Contains(body, `</script><div class="window summary" lang="en">`) {
 		t.Error("the window is not in the side before the thread's column")
 	}
 	// the phone's way in: the sparkle between Feed and the language menu,

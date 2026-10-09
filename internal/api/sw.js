@@ -24,7 +24,7 @@ const VERSION = "__HUB_BUILD__";
 const SHELL = "hub-shell-" + VERSION, PAGES = "hub-pages", FILES = "hub-files";
 const KEEP_PAGES = 150, KEEP_FILES = 800, FILE_MAX = 12 << 20, WAIT = 3000;
 // the pages kept: the feed (any of its pages), a thread, a profile, a search
-const PAGE = /^\/(?:p\/[0-9a-f]{8,64}|u\/[0-9a-f]{16}|search)?$/i;
+const PAGE = /^\/(?:p\/[0-9a-f]{8,64}|u\/[0-9a-f]{16}(?:\/(?:notifications|bookmarks))?|search)?$/i;
 // kept, and asked for again each time: shown at once, refreshed behind
 const ICONS = new Set(["/favicon.ico", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png", "/manifest.webmanifest"]);
 

@@ -85,8 +85,10 @@ under Docker Desktop and the host's LAN address on Linux — not
   every hub that carries it. A per-author monotonic `seq` stops replays.
 - **Operations.** `profile.set` (name, bio, avatar), `post.create` (text up
   to 8 KB, up to four embeds, optional `reply_to`), `post.delete` (always
-  allowed for one's own posts), and the admin-only `ban.set`, `ban.lift`,
-  `peer.add`, `peer.remove`. There is no edit.
+  allowed for one's own posts), `post.mark` (a to-do box of one's own
+  post), `post.bookmark` (keep a post, publicly, on this hub), and the
+  admin-only `ban.set`, `ban.lift`, `peer.add`, `peer.remove`. There is
+  no edit.
 - **Storage.** SQLite in WAL mode. The `messages` table is the append-only
   log of raw signed envelopes and the source of truth; profiles, posts,
   embeds, pins, bans and peers are derived tables, rebuildable by replay.
@@ -181,7 +183,10 @@ signatures and never a cookie. Writes authenticate by signature alone.
 ## Public pages
 
 `GET /` is the feed and how to join, `/p/{id}` a thread, `/u/{id}` a
-profile, `/search?q=` a search, `/stats` who reads the hub. The pages'
+profile, `/u/{id}/notifications` and `/u/{id}/bookmarks` what concerns
+that id and the posts it keeps, `/search?q=` a search, `/stats` who
+reads the hub. Signed in with a wallet, the join window becomes a
+Navigation window: Home, Notifications, Bookmarks, Profile. The pages'
 own words — the join window, the pager, the Post window, every message
 — are in English, Simplified Chinese or Japanese: `?lang=en`, `?lang=zh`
 or `?lang=ja` when the address says, else the browser's first language,

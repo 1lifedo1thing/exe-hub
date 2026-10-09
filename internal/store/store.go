@@ -14,6 +14,7 @@ import (
 	"math"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -122,6 +123,17 @@ CREATE TABLE IF NOT EXISTS marks (
   id   TEXT NOT NULL,
   PRIMARY KEY (post, box)
 );
+
+-- the posts each author keeps, as their post.bookmark ops last said
+-- (PLAN.md, The signed-in reader's desk — Bookmarks): a row is a post
+-- kept, received the hub's time for the op that kept it
+CREATE TABLE IF NOT EXISTS bookmarks (
+  author   TEXT NOT NULL,             -- profile id
+  post     TEXT NOT NULL,
+  received INTEGER NOT NULL,
+  PRIMARY KEY (author, post)
+);
+CREATE INDEX IF NOT EXISTS bookmarks_author ON bookmarks(author, received);
 
 CREATE TABLE IF NOT EXISTS embeds (
   post     TEXT NOT NULL,
@@ -675,6 +687,9 @@ func apply(tx *sql.Tx, id string, e *envelope.Envelope, op any, received int64, 
 		if _, err := tx.Exec(`DELETE FROM marks WHERE post=?`, v.Post); err != nil {
 			return nil, err
 		}
+		if _, err := tx.Exec(`DELETE FROM bookmarks WHERE post=?`, v.Post); err != nil {
+			return nil, err
+		}
 		// The post's link card goes with it, its picture's pin released.
 		var cimg string
 		if err := tx.QueryRow(`SELECT image FROM cards WHERE post=?`, v.Post).Scan(&cimg); err != nil && err != sql.ErrNoRows {
@@ -787,6 +802,27 @@ func apply(tx *sql.Tx, id string, e *envelope.Envelope, op any, received int64, 
 			return nil, err
 		}
 		return nil, nil
+	case *envelope.PostBookmark:
+		// an author's ops land in seq order, which is the order they mean,
+		// so the last one stands: no timestamps to weigh, as marks have
+		// (bookmarks never replicate, so no second order exists)
+		if !v.On {
+			_, err = tx.Exec(`DELETE FROM bookmarks WHERE author=? AND post=?`, pid, v.Post)
+			return nil, err
+		}
+		var n int
+		if err = tx.QueryRow(`SELECT COUNT(*) FROM posts WHERE id=?`, v.Post).Scan(&n); err != nil {
+			return nil, err
+		}
+		if n == 0 {
+			if replay {
+				return nil, nil // a post gone some other way since: nothing to keep
+			}
+			return nil, ErrNotFound
+		}
+		_, err = tx.Exec(`INSERT INTO bookmarks (author, post, received) VALUES (?,?,?)
+			ON CONFLICT(author, post) DO UPDATE SET received=excluded.received`, pid, v.Post, received)
+		return nil, err
 	case *envelope.BanSet:
 		_, err = tx.Exec(`INSERT INTO bans (target, reason, by, ts) VALUES (?,?,?,?)
 			ON CONFLICT(target) DO UPDATE SET reason=excluded.reason, by=excluded.by, ts=excluded.ts`,
@@ -877,7 +913,7 @@ func (s *Store) Rebuild() error {
 		return err
 	}
 	defer tx.Rollback()
-	for _, t := range []string{"profiles", "posts", "embeds", "marks", "bans", "invites", "seqs", "peers"} {
+	for _, t := range []string{"profiles", "posts", "embeds", "marks", "bookmarks", "bans", "invites", "seqs", "peers"} {
 		if _, err := tx.Exec(`DELETE FROM ` + t); err != nil {
 			return err
 		}
@@ -987,6 +1023,9 @@ type FeedPost struct {
 	// a box with no mark stands as the text has it (see PLAN.md, To-do
 	// marks)
 	Boxes map[int]bool `json:"boxes,omitempty"`
+	// in a notifications list: what the post is to the reader the list
+	// is for — WhyReply, WhyMention or WhyThread (see Notifications)
+	Why string `json:"why,omitempty"`
 }
 
 // ReplyRef is the newest reply in a thread, as the root carries it.
@@ -2209,6 +2248,197 @@ func (s *Store) ProfileFeedNewer(author, after string, limit int) ([]FeedPost, e
 	}
 	defer rows.Close()
 	return s.scanFeed(rows)
+}
+
+// ---- the signed-in reader's desk (PLAN.md) ----
+
+// Bookmarks is the posts author (a profile id) keeps, the newest
+// bookmark first, keyset-paginated by the post a page ends at.
+func (s *Store) Bookmarks(author, before string, limit int) ([]FeedPost, error) {
+	recv, bid, err := s.bookmarkCursor(author, before)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.Query(feedQuery+`JOIN bookmarks b ON b.post = p.id AND b.author = ?
+		WHERE (b.received, b.post) < (?, ?) ORDER BY b.received DESC, b.post DESC LIMIT ?`, author, recv, bid, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return s.scanFeed(rows)
+}
+
+// BookmarksNewer is Bookmarks' other direction, like FeedNewer.
+func (s *Store) BookmarksNewer(author, after string, limit int) ([]FeedPost, error) {
+	recv, aid, err := s.bookmarkCursor(author, after)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.db.Query(feedQuery+`JOIN bookmarks b ON b.post = p.id AND b.author = ?
+		WHERE (b.received, b.post) > (?, ?) ORDER BY b.received, b.post LIMIT ?`, author, recv, aid, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return s.scanFeed(rows)
+}
+
+// bookmarkCursor is where a page of author's bookmarks begins: the time
+// post was kept. A post no longer kept is no page (ErrNotFound).
+func (s *Store) bookmarkCursor(author, post string) (int64, string, error) {
+	if post == "" {
+		return 1 << 62, "￿", nil
+	}
+	var recv int64
+	err := s.db.QueryRow(`SELECT received FROM bookmarks WHERE author=? AND post=?`, author, post).Scan(&recv)
+	if err == sql.ErrNoRows {
+		return 0, "", ErrNotFound
+	}
+	return recv, post, err
+}
+
+// BookmarkIDs is the posts author keeps, newest first, at most limit:
+// what a page draws its Bookmark buttons by.
+func (s *Store) BookmarkIDs(author string, limit int) ([]string, error) {
+	rows, err := s.db.Query(`SELECT post FROM bookmarks WHERE author=? ORDER BY received DESC, post DESC LIMIT ?`, author, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// What a post is to the reader a notifications list is for, the push
+// notifier's reasons (internal/push) in its order: an answer to them
+// before a mention, a mention before a thread they are merely in.
+const (
+	WhyReply   = "reply"   // a reply to a post of theirs
+	WhyMention = "mention" // a post that names them
+	WhyThread  = "thread"  // a reply in a thread they wrote in, after their first post there
+)
+
+// concernCTE is every post that may concern ?1, with why: the replies
+// to its posts; the posts whose text holds "@" and its id (a candidate
+// only — the caller asks whether it shows as a mention); and the
+// replies in the threads it wrote in that came after its first post
+// in the thread — what a subscription would have been pushed then,
+// ThreadAuthors being who had written in the thread so far. A thread
+// is found by walking each of its posts up to the root; a chain broken
+// by a parent this hub does not hold reaches none. Never its own posts.
+const concernCTE = `WITH RECURSIVE
+up(recv, id, parent) AS (
+  SELECT received, id, reply_to FROM posts WHERE author = ?1
+  UNION ALL
+  SELECT u.recv, p.id, p.reply_to FROM posts p JOIN up u ON p.id = u.parent
+),
+joined(root, since) AS (SELECT id, MIN(recv) FROM up WHERE parent = '' GROUP BY id),
+down(since, id) AS (
+  SELECT since, root FROM joined
+  UNION ALL
+  SELECT d.since, p.id FROM posts p JOIN down d ON p.reply_to = d.id
+),
+concern(id, why) AS (
+  SELECT p.id, 'reply' FROM posts p JOIN posts pp ON pp.id = p.reply_to WHERE pp.author = ?1 AND p.author <> ?1
+  UNION ALL
+  SELECT id, 'mention' FROM posts WHERE author <> ?1 AND text LIKE '%@' || ?1 || '%'
+  UNION ALL
+  SELECT d.id, 'thread' FROM down d JOIN posts p ON p.id = d.id WHERE p.author <> ?1 AND p.received > d.since
+)
+`
+
+// Notifications is what concerns profile me, newest first, keyset-
+// paginated by post id like the feed (PLAN.md, The signed-in reader's
+// desk — Notifications), each post's Why set. mentions says whether a
+// text names me as a page shows a mention (card.Mentions: not inside a
+// code span or a link), which this package cannot import; a post that
+// is only a candidate mention and fails it is left out, and the page
+// is filled from further on.
+func (s *Store) Notifications(me, before string, limit int, mentions func(text string) bool) ([]FeedPost, error) {
+	return s.notifications(me, before, limit, false, mentions)
+}
+
+// NotificationsNewer is Notifications' other direction, like FeedNewer.
+func (s *Store) NotificationsNewer(me, after string, limit int, mentions func(text string) bool) ([]FeedPost, error) {
+	return s.notifications(me, after, limit, true, mentions)
+}
+
+func (s *Store) notifications(me, cursor string, limit int, newer bool, mentions func(string) bool) ([]FeedPost, error) {
+	recv, cid, err := s.cursor(cursor)
+	if err != nil {
+		return nil, err
+	}
+	if newer && cursor == "" {
+		recv, cid = -1, ""
+	}
+	cmp, order := "<", "DESC"
+	if newer {
+		cmp, order = ">", "ASC"
+	}
+	q := concernCTE + `SELECT p.id, p.text, p.received, group_concat(c.why) FROM concern c JOIN posts p ON p.id = c.id
+		WHERE (p.received, p.id) ` + cmp + ` (?2, ?3) GROUP BY p.id ORDER BY p.received ` + order + `, p.id ` + order + ` LIMIT ?4`
+	why := map[string]string{}
+	var ids []string
+	for len(ids) < limit {
+		rows, err := s.db.Query(q, me, recv, cid, limit)
+		if err != nil {
+			return nil, err
+		}
+		n := 0
+		for rows.Next() {
+			var id, text, whys string
+			if err := rows.Scan(&id, &text, &recv, &whys); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			cid = id
+			n++
+			w := ""
+			switch has := strings.Split(whys, ","); {
+			case slices.Contains(has, WhyReply):
+				w = WhyReply
+			case slices.Contains(has, WhyMention) && mentions(text):
+				w = WhyMention
+			case slices.Contains(has, WhyThread):
+				w = WhyThread
+			}
+			if w != "" && len(ids) < limit {
+				why[id] = w
+				ids = append(ids, id)
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		if n < limit {
+			break
+		}
+	}
+	if len(ids) == 0 {
+		return []FeedPost{}, nil
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := s.db.Query(feedQuery+`WHERE p.id IN (?`+strings.Repeat(",?", len(ids)-1)+`) ORDER BY p.received `+order+`, p.id `+order, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out, err := s.scanFeed(rows)
+	for i := range out {
+		out[i].Why = why[out[i].ID]
+	}
+	return out, err
 }
 
 // searchWhere is the search's filter: one LIKE per word of q, all of

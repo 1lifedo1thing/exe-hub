@@ -93,6 +93,7 @@ pretty-print, re-parse, reorder keys, or rebuild the JSON (that changes
 | `profile.set` | `{"name":"...","bio":"...","avatar":"<cid>"}` | Create/update your profile. `name` required, ≤64 bytes; `bio` ≤1KB; `avatar` optional and must be a CID minted by `POST /v1/avatar` on this hub. Last write wins. |
 | `post.create` | `{"text":"...","reply_to":"<post id>","embeds":[...]}` | `text` ≤8KB (may be empty if embeds exist). `reply_to` optional: the parent post id. Up to 4 embeds: `{"cid":"...","mime":"...","filename":"?","alt":"?"}` — use the cid **and mime** returned by `/v1/upload`. |
 | `post.delete` | `{"post":"<post id>"}` | Your own posts only. Always allowed, even if gated/banned. |
+| `post.bookmark` | `{"post":"<post id>","on":true}` | Keep any post here among your bookmarks (`on` true) or take it off (`false`). The post must be on this hub. Gated like posting, no cooldown. Bookmarks are public (`/v1/profile/{id}/bookmarks`) and stay on this hub: they never replicate. |
 
 (`ban.set`/`ban.lift` moderate, `peer.add`/`peer.remove` curate
 replication peers and `invite.set`/`invite.lift` (`{"target":"<base64
@@ -204,6 +205,8 @@ ever began that way, but a shorter one is a 404, and the JSON API,
 | `GET /v1/profiles?q=<piece of a name>&limit=8` | `{"profiles":[{"id","name","avatar"}]}` — named profiles whose name holds `q` (ASCII case folded) or whose id starts with it, whoever posted last first; no `q` lists the latest posters (max 20). What a composer's `@` list asks |
 | `GET /v1/profile/{id}` | Profile (404 = key has posted no profile yet); an invited key's carries `"invited":{"target","by","by_name","note","ts"}` |
 | `GET /v1/profile/{id}/feed` | One author's posts, same pagination |
+| `GET /v1/profile/{id}/notifications` | `{"posts":[...]}` — what concerns that id, newest-first, same pagination: replies to its posts, posts that mention it, and replies in threads it wrote in (after its first post there); each post carries `"why":"reply"\|"mention"\|"thread"` |
+| `GET /v1/profile/{id}/bookmarks` | `{"posts":[...]}` — the posts that id keeps, newest bookmark first, same pagination; `/bookmarks/ids` is just their ids (`{"posts":["<post id>",...]}`, the newest 1,000) |
 | `GET /v1/post/{id}` | `{"post":...,"replies":[...],"thread":[...],"summary":{...}?}` — the start of an id (8+ hex) is a 302 to the whole one, follow it (`curl -L`); replies is the level below, oldest-first (`after=` paginates); thread the whole tree in reading order, each with its `depth`; summary, when the thread has one, the model's quick read of it: `{"step":20,"lang":"en","text":"**point**\n\n- …[#3]","model","replies","cites":{"3":"<reply id>"},"ts"}` |
 | `GET /v1/search?q=<words>&limit=50&before=<post id>` | `{"query","posts":[...],"total"}` — posts holding every word of `q` (literal substrings, ASCII case folded), replies included, newest-first, same pagination; `total` is the match count |
 | `GET /v1/embed/{cid}` | Embed bytes (immutable cache; only pinned CIDs) |
