@@ -365,6 +365,10 @@ CREATE TABLE IF NOT EXISTS translation_notes (
 		// (PLAN.md, YouTube players): 1 yes, 0 no, -1 not asked yet — the
 		// cards from before the column, and an ask that got no answer
 		`ALTER TABLE cards ADD COLUMN plays INTEGER NOT NULL DEFAULT -1`,
+		// the asks that got no answer: how many rounds, and when the last
+		// began — the sweep's bounds (PLAN.md, YouTube players)
+		`ALTER TABLE cards ADD COLUMN plays_tries INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE cards ADD COLUMN plays_ts INTEGER NOT NULL DEFAULT 0`,
 		// whom a subscription is for (PLAN.md, Notifications): the
 		// profile id its browser was signed in as, '' for every post
 		`ALTER TABLE push_subs ADD COLUMN profile TEXT NOT NULL DEFAULT ''`,
@@ -1068,7 +1072,7 @@ type Card struct {
 	// sites: the card plays it in place (PLAN.md, YouTube players)
 	Plays bool `json:"plays,omitempty"`
 	// written only: YouTube was asked whether the video plays and gave no
-	// answer, so the start-up pass asks again
+	// answer — the first of the sweep's rounds, which ask again
 	PlaysUnknown bool `json:"-"`
 }
 
@@ -1441,17 +1445,18 @@ func (s *Store) setCard(post string, c Card, quote, status string, imageSize int
 			return nil, err
 		}
 	}
-	plays := 0
+	now := time.Now().UnixMilli()
+	plays, playsTries, playsTS := 0, 0, int64(0)
 	if c.Plays {
 		plays = 1
 	} else if c.PlaysUnknown {
-		plays = -1
+		plays, playsTries, playsTS = -1, 1, now // the ask that got no answer was round one
 	}
-	if _, err := tx.Exec(`INSERT INTO cards (post, url, host, title, descr, image, quote, status, ts, plays) VALUES (?,?,?,?,?,?,?,?,?,?)
+	if _, err := tx.Exec(`INSERT INTO cards (post, url, host, title, descr, image, quote, status, ts, plays, plays_tries, plays_ts) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(post) DO UPDATE SET url=excluded.url, host=excluded.host, title=excluded.title,
 		descr=excluded.descr, image=excluded.image, quote=excluded.quote, status=excluded.status, ts=excluded.ts,
-		plays=excluded.plays, archive='', archive_tries=0, archive_ts=0`,
-		post, c.URL, c.Host, c.Title, c.Desc, c.Image, quote, status, time.Now().UnixMilli(), plays); err != nil {
+		plays=excluded.plays, plays_tries=excluded.plays_tries, plays_ts=excluded.plays_ts, archive='', archive_tries=0, archive_ts=0`,
+		post, c.URL, c.Host, c.Title, c.Desc, c.Image, quote, status, now, plays, playsTries, playsTS); err != nil {
 		return nil, err
 	}
 	return unpin, tx.Commit()
@@ -1680,13 +1685,16 @@ func (s *Store) BeginArchive(post string, maxTries int, before int64) (link stri
 	return link, err
 }
 
-// CardsUnasked lists the posts whose ok link card has not been asked
+// CardsUnasked lists the posts whose ok link card has no answer yet to
 // whether its link plays in place — the cards from before YouTube
-// players, and a YouTube link whose ask got no answer (PLAN.md, YouTube
-// players). Text carries the card's link.
-func (s *Store) CardsUnasked() ([]CardPost, error) {
+// players, and a YouTube link whose asks got no answer — with rounds
+// left and no round begun since before (unix ms): the sweep's
+// worklist, oldest round first (PLAN.md, YouTube players). Text carries
+// the card's link.
+func (s *Store) CardsUnasked(maxTries int, before int64, limit int) ([]CardPost, error) {
 	rows, err := s.db.Query(`SELECT p.id, p.author, c.url FROM cards c JOIN posts p ON p.id = c.post
-		WHERE c.plays < 0 AND c.status = 'ok' AND c.quote = ''`)
+		WHERE c.plays < 0 AND c.status = 'ok' AND c.quote = '' AND c.plays_tries < ? AND c.plays_ts < ?
+		ORDER BY c.plays_ts, p.received DESC LIMIT ?`, maxTries, before, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -1709,6 +1717,14 @@ func (s *Store) SetPlays(post string, plays bool) error {
 		v = 1
 	}
 	_, err := s.db.Exec(`UPDATE cards SET plays = ? WHERE post = ?`, v, post)
+	return err
+}
+
+// PlaysUnanswered counts a round that asked whether the card's link
+// plays and got no answer, and stamps it now, so the sweep's next round
+// for it waits its turn.
+func (s *Store) PlaysUnanswered(post string) error {
+	_, err := s.db.Exec(`UPDATE cards SET plays_tries = plays_tries + 1, plays_ts = ? WHERE post = ? AND plays < 0`, time.Now().UnixMilli(), post)
 	return err
 }
 

@@ -259,7 +259,8 @@ func TestPostCards(t *testing.T) {
 
 // TestCardPlays: whether a card's link plays in place is read with the
 // card; a card from before the column, or one whose ask had no answer,
-// is listed until it has one (PLAN.md, YouTube players).
+// is listed for the sweep until it has one — in its turn, while it has
+// rounds left (PLAN.md, YouTube players).
 func TestCardPlays(t *testing.T) {
 	s := openTest(t)
 	a := newAuthor(t)
@@ -281,8 +282,8 @@ func TestCardPlays(t *testing.T) {
 	if _, err := s.db.Exec(`UPDATE cards SET plays = -1 WHERE post = ?`, old); err != nil {
 		t.Fatal(err)
 	}
-	unasked := func() map[string]string {
-		ps, err := s.CardsUnasked()
+	unasked := func(maxTries int, before int64) map[string]string {
+		ps, err := s.CardsUnasked(maxTries, before, 64)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -292,8 +293,36 @@ func TestCardPlays(t *testing.T) {
 		}
 		return m
 	}
-	if got := unasked(); len(got) != 2 || got[unknown] != "https://youtu.be/ccccccccccc" || got[old] != "https://a.example/x" {
+	ahead := time.Now().Add(time.Second).UnixMilli() // every round's turn has come
+	if got := unasked(24, ahead); len(got) != 2 || got[unknown] != "https://youtu.be/ccccccccccc" || got[old] != "https://a.example/x" {
 		t.Errorf("CardsUnasked = %v", got)
+	}
+	// the ask that got no answer was round one, stamped: not its turn
+	// again yet; the card from before the column has had no round
+	if got := unasked(24, 1); len(got) != 1 || got[old] == "" {
+		t.Errorf("CardsUnasked before any round's turn = %v", got)
+	}
+	var tries int
+	var ts int64
+	if err := s.db.QueryRow(`SELECT plays_tries, plays_ts FROM cards WHERE post = ?`, unknown).Scan(&tries, &ts); err != nil || tries != 1 || ts == 0 {
+		t.Errorf("the unanswered card's round: %d at %d (%v), want 1 stamped", tries, ts, err)
+	}
+	// a round with no answer counts; past the cap the card is left alone
+	if err := s.PlaysUnanswered(unknown); err != nil {
+		t.Fatal(err)
+	}
+	if got := unasked(2, ahead); len(got) != 1 || got[old] == "" {
+		t.Errorf("CardsUnasked past the cap = %v", got)
+	}
+	if got := unasked(3, ahead); len(got) != 2 {
+		t.Errorf("CardsUnasked with a round left = %v", got)
+	}
+	// an answered card counts no rounds
+	if err := s.PlaysUnanswered(yes); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.QueryRow(`SELECT plays_tries FROM cards WHERE post = ?`, yes).Scan(&tries); err != nil || tries != 0 {
+		t.Errorf("an answered card's rounds: %d (%v), want 0", tries, err)
 	}
 	plays := func() map[string]bool {
 		posts, err := s.Feed("", 10, false)
@@ -315,7 +344,7 @@ func TestCardPlays(t *testing.T) {
 	if err := s.SetPlays(old, false); err != nil {
 		t.Fatal(err)
 	}
-	if got := unasked(); len(got) != 0 {
+	if got := unasked(24, ahead); len(got) != 0 {
 		t.Errorf("CardsUnasked after the answers = %v", got)
 	}
 	if got := plays(); !got[unknown] || got[old] {

@@ -19,8 +19,10 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
+	"exehub/internal/card"
 	"exehub/internal/config"
 	"exehub/internal/envelope"
 	"exehub/internal/events"
@@ -1135,6 +1137,79 @@ func TestWebYouTube(t *testing.T) {
 	}
 	if _, js := get(t, h, "/v1/post/"+kept); strings.Contains(js, `"plays"`) {
 		t.Errorf("JSON card of a kept video says plays: %s", js)
+	}
+}
+
+// TestWebPlaysRetry: a YouTube card whose ask got no answer when it
+// landed is a plain card; the sweep's round asks again in its turn —
+// the line dropping once more counts the round, and a 200 records the
+// answer and announces post.card, so the open page's next fetch draws
+// the player with no restart (Codex's case, 2026-10-09; PLAN.md,
+// YouTube players).
+func TestWebPlaysRetry(t *testing.T) {
+	s := testServer(t, &config.Config{Gate: config.Gate{Mode: "open"}})
+	s.Events = events.New()
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	const link = "https://youtu.be/aaaaaaaaaaa"
+	id := ingest(t, s, priv, pub, 1, "post.create", map[string]any{"text": "watch " + link})
+	if _, err := s.St.SetCard(id, store.Card{URL: link, Host: "youtu.be", Title: "A Video", PlaysUnknown: true}, 0, "", true); err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+	player := func() bool {
+		_, body := get(t, h, "/")
+		return strings.Contains(body, `<div class="ytv" data-yt="aaaaaaaaaaa">`)
+	}
+	if player() {
+		t.Error("a player before YouTube answered")
+	}
+	// YouTube: the line drops once more, then answers
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			c, _, _ := w.(http.Hijacker).Hijack()
+			c.Close()
+			return
+		}
+		w.Write([]byte(`{"type":"video"}`))
+	}))
+	defer srv.Close()
+	w := card.NewWorker(s.St, nil, s.Events)
+	w.F.AllowPrivate = true
+	w.F.OEmbed = srv.URL + "/oembed"
+	ch := s.Events.Subscribe()
+	defer s.Events.Unsubscribe(ch)
+	turn := func() int64 { return time.Now().Add(time.Second).UnixMilli() }
+	// not its turn yet: the round that landed the card was just now
+	w.AskPlays(1)
+	if calls != 0 {
+		t.Fatalf("asked %d times before the card's turn", calls)
+	}
+	w.AskPlays(turn()) // round two: no answer
+	if calls != 1 || player() {
+		t.Fatalf("after a round with no answer: %d asks, player %v", calls, player())
+	}
+	select {
+	case ev := <-ch:
+		t.Errorf("an event with no answer: %+v", ev)
+	default:
+	}
+	w.AskPlays(turn()) // round three: 200
+	if calls != 2 || !player() {
+		t.Fatalf("after the answer: %d asks, player %v", calls, player())
+	}
+	select {
+	case ev := <-ch:
+		if ev.Type != "post.card" || ev.ID != id {
+			t.Errorf("the answer's event: %+v", ev)
+		}
+	default:
+		t.Error("no post.card for the answer: an open page would not learn of it")
+	}
+	w.AskPlays(turn()) // answered: no more rounds
+	if calls != 2 {
+		t.Errorf("an answered card asked again: %d asks", calls)
 	}
 }
 

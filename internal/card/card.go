@@ -224,10 +224,13 @@ type Fetcher struct {
 	// AllowPrivate lifts the public-address guard — tests only, where the
 	// page under test lives on 127.0.0.1.
 	AllowPrivate bool
+	// OEmbed is where YouTube says whether a video plays on other sites
+	// (Plays); a test points it at its own server.
+	OEmbed string
 }
 
 func NewFetcher() *Fetcher {
-	f := &Fetcher{}
+	f := &Fetcher{OEmbed: "https://www.youtube.com/oembed"}
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	f.client = &http.Client{
 		Timeout: 20 * time.Second,

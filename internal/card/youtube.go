@@ -65,17 +65,13 @@ func YouTube(link string) (id string, start int) {
 	return id, start
 }
 
-// oEmbed is where YouTube says whether a video plays on other sites; a
-// test points it at its own server.
-var oEmbed = "https://www.youtube.com/oembed"
-
 // Plays asks YouTube whether the video plays on other sites, through its
 // oEmbed endpoint and the guarded client: 200 is yes, and 401 (the
 // owner turned embedding off), 403, 404 (private, or gone) and 400 (no
 // such id) are no. Anything else — no connection, a timeout, a 429, a
-// 5xx — is no answer (known false), and the start-up pass asks again.
+// 5xx — is no answer (known false), and the sweep asks again.
 func (f *Fetcher) Plays(ctx context.Context, id string) (plays, known bool) {
-	u := oEmbed + "?format=json&url=" + url.QueryEscape("https://www.youtube.com/watch?v="+id)
+	u := f.OEmbed + "?format=json&url=" + url.QueryEscape("https://www.youtube.com/watch?v="+id)
 	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 	if err != nil {
 		return false, false

@@ -48,7 +48,7 @@ func TestYouTube(t *testing.T) {
 
 // TestPlays: YouTube's oEmbed answer decides whether a video plays in
 // its card — 200 yes; 401 (embedding off), 403, 404 and 400 no; a 5xx,
-// a 429 or no connection is no answer, asked again at the next start.
+// a 429 or no connection is no answer, asked again by the sweep.
 func TestPlays(t *testing.T) {
 	codes := map[string]int{"aaaaaaaaaaa": 200, "bbbbbbbbbbb": 401, "ccccccccccc": 404, "ddddddddddd": 400,
 		"eeeeeeeeeee": 403, "fffffffffff": 500, "ggggggggggg": 429}
@@ -59,10 +59,9 @@ func TestPlays(t *testing.T) {
 		w.WriteHeader(codes[id])
 	}))
 	defer srv.Close()
-	defer func(old string) { oEmbed = old }(oEmbed)
-	oEmbed = srv.URL + "/oembed"
 	f := NewFetcher()
 	f.AllowPrivate = true
+	f.OEmbed = srv.URL + "/oembed"
 	for id, code := range codes {
 		plays, known := f.Plays(context.Background(), id)
 		wantPlays, wantKnown := code == 200, code < 500 && code != 429

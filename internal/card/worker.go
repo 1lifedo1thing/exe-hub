@@ -39,10 +39,14 @@ type job struct {
 }
 
 // A linked picture gets at most pictureTries fetches, an hour apart —
-// the sweep's period — before its link is left a link.
+// the sweep's period — before its link is left a link; a YouTube link
+// YouTube does not answer for is asked at most playsTries times, an
+// hour apart, before its card is left a link card (PLAN.md, YouTube
+// players).
 const (
 	pictureTries = 3
 	pictureEvery = time.Hour
+	playsTries   = 24
 )
 
 func NewWorker(st *store.Store, ipfsc *ipfs.Client, bus *events.Broadcaster) *Worker {
@@ -135,37 +139,6 @@ func (w *Worker) Backfill() {
 	if n > 0 {
 		log.Printf("card backfill: %d cards quoting posts queued again", n)
 	}
-	// a card from before YouTube players, or one whose ask got no
-	// answer, is asked now — only a YouTube link costs a request; the
-	// page and its picture are not fetched again
-	unasked, err := w.St.CardsUnasked()
-	if err != nil {
-		log.Printf("card backfill: %v", err)
-		return
-	}
-	n = 0
-	for _, p := range unasked {
-		plays, known := false, true
-		if id, _ := YouTube(p.Text); id != "" {
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			plays, known = w.F.Plays(ctx, id)
-			cancel()
-			n++
-		}
-		if !known {
-			continue
-		}
-		if err := w.St.SetPlays(p.ID, plays); err != nil {
-			log.Printf("card backfill: %v", err)
-			return
-		}
-		if plays && w.Bus != nil {
-			w.Bus.Emit(events.Event{Type: "post.card", ID: p.ID, Author: p.Author})
-		}
-	}
-	if n > 0 {
-		log.Printf("card backfill: %d YouTube cards asked whether they play", n)
-	}
 	untried, err := w.St.PostsWithoutPictures(256)
 	if err != nil {
 		log.Printf("picture backfill: %v", err)
@@ -186,18 +159,67 @@ func (w *Worker) Backfill() {
 
 // Sweep queues, hourly, every post with a linked picture that failed,
 // has rounds left and was last tried an hour ago — the gateway that did
-// not answer the first time.
+// not answer the first time — and asks YouTube again about the cards it
+// did not answer for (AskPlays). Its first round, at start, covers the
+// cards from before each feature.
 func (w *Worker) Sweep() {
 	time.Sleep(25 * time.Second) // after the backfill has had its turn
 	for {
-		posts, err := w.St.PicturesToRetry(pictureTries, time.Now().Add(-pictureEvery).UnixMilli(), 64)
+		before := time.Now().Add(-pictureEvery).UnixMilli()
+		posts, err := w.St.PicturesToRetry(pictureTries, before, 64)
 		if err != nil {
 			log.Printf("picture sweep: %v", err)
 		}
 		for _, p := range posts {
 			w.Enqueue(p.ID, p.Author, p.Text, false)
 		}
+		w.AskPlays(before)
 		time.Sleep(pictureEvery)
+	}
+}
+
+// AskPlays is the sweep's round for the cards with no answer yet to
+// whether their link plays in place (PLAN.md, YouTube players): the
+// cards from before the feature, and the YouTube links whose asks got no
+// answer — rounds left, none begun since before (unix ms). Only a
+// YouTube link costs a request, one oEmbed call; any other link is a no
+// at once; the page and its picture are never fetched again. An answer
+// is recorded, a yes announced as post.card so an open page gains its
+// Play button; no answer counts the round, and the next waits its turn.
+func (w *Worker) AskPlays(before int64) {
+	unasked, err := w.St.CardsUnasked(playsTries, before, 64)
+	if err != nil {
+		log.Printf("plays sweep: %v", err)
+		return
+	}
+	n, got := 0, 0
+	for _, p := range unasked {
+		plays, known := false, true
+		if id, _ := YouTube(p.Text); id != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			plays, known = w.F.Plays(ctx, id)
+			cancel()
+			n++
+			if known {
+				got++
+			}
+		}
+		if !known {
+			if err := w.St.PlaysUnanswered(p.ID); err != nil {
+				log.Printf("plays sweep: %v", err)
+			}
+			continue
+		}
+		if err := w.St.SetPlays(p.ID, plays); err != nil {
+			log.Printf("plays sweep: %v", err)
+			return
+		}
+		if plays && w.Bus != nil {
+			w.Bus.Emit(events.Event{Type: "post.card", ID: p.ID, Author: p.Author})
+		}
+	}
+	if n > 0 {
+		log.Printf("plays sweep: %d YouTube cards asked whether they play, %d answered", n, got)
 	}
 }
 

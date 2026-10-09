@@ -2176,13 +2176,25 @@ puts YouTube's player in that box, playing. Asked by Livid 2026-10-09:
   worker asks YouTube's oEmbed endpoint once, when the card is made
   (`Fetcher.Plays`, through the guarded client): 200 plays; 401
   (embedding off), 403, 404 and 400 do not; no connection, a timeout, a
-  429 or a 5xx is no answer. `cards.plays` keeps it: 1, 0, or -1 for not
-  asked — the cards from before this and an ask with no answer — and the
-  start-up backfill asks those (`CardsUnasked`; a link that is not
-  YouTube is set 0 with no request; the page and its picture are not
-  fetched again), emitting `post.card` for one that plays. Every hub
-  asks for itself, like the rest of a card. `FeedPost.card.plays` carries
-  it in every JSON read.
+  429 or a 5xx is no answer. `cards.plays` keeps it: 1, 0, or -1 for no
+  answer yet — the cards from before this and an ask with no answer.
+  Every hub asks for itself, like the rest of a card. `FeedPost.card.plays`
+  carries it in every JSON read.
+- **Asked again, hourly, 24 rounds.** No answer is not a no: a YouTube
+  outage at the moment a card lands would otherwise hide Play until the
+  next restart (Codex's catch, 2026-10-09; Livid: "Improve."). So the
+  card worker's hourly sweep (`AskPlays`, with the pictures' retries)
+  asks again about every card still at -1 that has rounds left and
+  began none in the last hour — the shape of the Archive's rounds:
+  `cards.plays_tries` and `cards.plays_ts`, the ask that got no answer
+  when the card landed counted as round one. A link that is not YouTube
+  is a no at once, no request; a YouTube link costs one oEmbed call a
+  round; the page and its picture are never fetched again. An answer is
+  recorded, a yes announced as `post.card`, so a page open on the post
+  draws the player at its next fetch, no restart; no answer counts the
+  round. After 24 rounds (a day) the card is left a link card. The
+  sweep's first round, 25 s after start, covers the cards from before
+  this feature.
 - **Nothing from YouTube until a press.** The poster is the hub's own
   copy, so a page with a YouTube card asks YouTube for nothing; the
   player loads only when a reader presses Play, from
