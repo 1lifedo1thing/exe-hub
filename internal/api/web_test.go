@@ -1790,7 +1790,7 @@ func TestWebDeskColumnsAreTheHubsOwn(t *testing.T) {
 	// the two columns and what places them are the hub's
 	for _, want := range []string{
 		`.desk .join { flex: 0 0 360px; position: sticky; top: 24px; margin: 0; }`,
-		`.desk > .nav { flex: 0 0 200px; position: sticky; top: 24px; margin: 0 0 0 160px; }`,
+		`.desk > .nav { flex: 0 0 200px; position: sticky; top: 24px; margin: 0; }`,
 		`.desk .main { flex: 0 1 640px; min-width: 0; }`,
 	} {
 		if !strings.Contains(body, want) {

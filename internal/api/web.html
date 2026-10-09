@@ -77,9 +77,8 @@ a.mention { text-decoration: none; }
   .desk .join { flex: 0 0 360px; position: sticky; top: 24px; margin: 0; }
   /* the Navigation window is narrower than the join window whose place it
      takes — four rows need no more (Livid, 2026-10-09: "a bit too wide")
-     — and stands at the right of that place, against the column, so the
-     column stays where it was: 200px and 160px of the 360 */
-  .desk > .nav { flex: 0 0 200px; position: sticky; top: 24px; margin: 0 0 0 160px; }
+     — and the desk is centred on it, the margins even either side */
+  .desk > .nav { flex: 0 0 200px; position: sticky; top: 24px; margin: 0; }
   .desk .main { flex: 0 1 640px; min-width: 0; }
   .desk .main > .window:last-child { margin-bottom: 0; }
 }
@@ -109,15 +108,22 @@ a.mention { text-decoration: none; }
    left the page unbalanced (Livid, the same day); something may stand
    there later. Narrower than 1060px the side waits for the phone
    design: nothing shows. */
-/* The side holds the Navigation window too (2026-10-09), above the
-   Summary, for a signed-in reader: the column then stands where the
-   feed's does. Signed out, a side with no Summary is no side. */
+/* The side holds the Navigation window too (2026-10-09), for a
+   signed-in reader: then it is the window's 200px, as on the home page,
+   and the Summary is a press away on the strip, as on a phone (Livid,
+   2026-10-09). Signed out, a side with no Summary is no side. */
 .desk .side { display: none; }
 @media (min-width: 1060px) {
   .desk .side:has(> .summary), .wallet .desk .side { display: block; flex: 0 0 360px; position: sticky; top: 24px; }
   .desk .side .window { margin: 0; }
-  .desk .side .nav { width: 200px; margin-left: auto; }
-  .wallet .desk .side .nav ~ .summary { margin-top: 22px; }
+  /* signed in, the side is the Navigation window's 200px on every page,
+     a thread's too, so the column stands where the feed's does and the
+     margins stay even; the Summary takes the phone's way, below —
+     at 200px a long one would stand taller than the window */
+  .wallet .desk .side { flex-basis: 200px; }
+  .wallet .desk .side .summary { display: none; }
+  .wallet .pager .spark { display: inline-flex; }
+  .wallet .sumfeed { display: grid; }
 }
 
 /* the Navigation window (PLAN.md, The signed-in reader's desk): Home,
@@ -162,7 +168,8 @@ a.mention { text-decoration: none; }
    slides it up again (Livid: "do not show it in a window, reuse the
    same in-feed style as the Hub app … with 0.12s slide down/up").
    From 1060px the side's window stands beside the thread instead and
-   the button and the in-feed block go. */
+   the button and the in-feed block go — for a reader signed out:
+   signed in, the side is the Navigation window's and they stay. */
 .pager .spark { grid-column: 2; justify-self: center; display: none; align-items: center; gap: 5px; padding: 2px 12px 2px 9px; }
 .pager .spark svg { width: 14px; height: 14px; display: block; shape-rendering: crispEdges; }
 .pager .spark .k, .sumfeed .sgl .k { fill: #262626; } .pager .spark .f, .sumfeed .sgl .f { fill: #ffcc33; } .pager .spark .s, .sumfeed .sgl .s { fill: #cc9933; } .pager .spark .w, .sumfeed .sgl .w { fill: #fff; }

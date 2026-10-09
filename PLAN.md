@@ -1759,13 +1759,25 @@ bookmark op for post), Profile".
 - **Where it stands.** Every page a signed-in reader moves between is a
   desk with the Navigation window at its side, so the column stays where
   the feed's is: the home page (in the join window's place), a thread
-  (its side, above the Summary window), Notifications, Bookmarks and a
-  profile page. From 1060px it stands in the side's 360px, sticky as the
-  join window is, but 200px wide (Livid, 2026-10-09: the full 360 was "a
-  bit too wide"), at the right of the side against the column, so the
-  column stays where it was — signing in moves nothing but the join
-  window, and a thread's Summary (360px) still lines up under it at the
-  right. Narrower, on the home page, Notifications, Bookmarks
+  (its side, where a signed-out reader's Summary window stands),
+  Notifications, Bookmarks and a profile page. From 1060px it is the side, sticky as the join window
+  is, 200px wide (Livid, 2026-10-09: the join window's 360 was "a bit
+  too wide"), and the desk is centred on it, the margins even either
+  side. A first try kept the side 360px with the window at its right,
+  so the column would not move at sign-in; it left the page lopsided
+  (288px of margin against 128 at 1280px wide — Livid: "do you really
+  think that is a good design?"), and a reader signs in once and reads
+  the page every day. So signing in moves the column 80px left as the
+  join window goes. A thread with a Summary would want the Summary's
+  360px side again — the column 80px right of the feed's, the 200px
+  window ragged over the 360px one — and the Summary cannot narrow to
+  200px: the longest one kept (1,450 characters) stood 1,337px tall
+  there, past a 900px window, which a sticky side never scrolls to. So
+  signed in on a desktop the side is the Navigation window alone on
+  every page, and a thread's Summary takes the phone's way — Summarize
+  on the strip, the summary sliding into the feed (Livid chose it,
+  2026-10-09). Signed out, the Summary window stands at the side as it
+  did. Narrower, on the home page, Notifications, Bookmarks
   and a profile, it is a strip at the top of the column — the four as
   tiles across, each glyph over its word — where the join window stood
   and where a signed-in reader on a phone had nothing (the feed still
@@ -3149,7 +3161,9 @@ at a reply on its page.
   clipping the post meanwhile, so no height is measured and the post's
   padding cannot hold the row open. Shown only under 1060px, where the
   side is hidden; from 1060px the side's window stands and the block
-  and the button go. A newer step the live page brings in stays open
+  and the button go — for a reader signed out: signed in, the side is
+  the Navigation window's 200px and the button and the block stay at
+  every width (2026-10-09, The signed-in reader's desk). A newer step the live page brings in stays open
   while the button is pressed. The browser check presses it at 1000px
   and on a phone, catches the slide mid-way, and measures the open block
   against its post and the closed one at nothing.
