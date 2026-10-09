@@ -3723,8 +3723,10 @@ document.addEventListener("change", e => {
      it by id. */}}
 {{define "lang"}}<span class="popup lang" id="lang"><select aria-label="{{T "language"}}" title="{{T "language"}}"><option value="en"{{if eq .L.Code "en"}} selected{{end}}>English</option><option value="zh"{{if eq .L.Code "zh"}} selected{{end}}>中文</option><option value="ja"{{if eq .L.Code "ja"}} selected{{end}}>日本語</option></select><span class="well"><i><b></b></i></span></span>{{end}}
 
+{{/* the Post and Reply windows have nothing to close: no close box,
+     the stripes run the whole bar (Livid, 2026-10-09) */}}
 {{define "compose"}}<div class="window composer">
-<div class="titlebar"><span class="tbox"></span><span class="stripe"></span><span class="title">{{if .ReplyTo}}{{T "reply"}}{{else}}{{T "post"}}{{end}}</span><span class="stripe"></span></div>
+<div class="titlebar"><span class="stripe"></span><span class="title">{{if .ReplyTo}}{{T "reply"}}{{else}}{{T "post"}}{{end}}</span><span class="stripe"></span></div>
 <div class="frame"><div class="compose" id="compose"{{if .ReplyTo}} data-reply-to="{{.ReplyTo}}"{{end}}>
   <div class="out">
     <div class="row pick-off"><span class="grow note">{{if .ReplyTo}}{{T "compose.note.reply"}}{{else}}{{T "compose.note.post"}}{{end}}</span><button type="button" class="btn signin">{{T "signin"}}</button></div>

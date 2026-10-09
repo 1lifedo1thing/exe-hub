@@ -1418,6 +1418,10 @@ func TestWebCompose(t *testing.T) {
 	if a, b, c := strings.Index(home, `<div class="main">`), strings.Index(home, `<div class="window composer">`), strings.Index(home, `<div class="window feed">`); a < 0 || !(a < b && b < c) {
 		t.Errorf("home: main %d, composer window %d, feed window %d — want the composer window first in the main column", a, b, c)
 	}
+	// nothing to close: the bar is stripes and the title
+	if !strings.Contains(home, "<div class=\"window composer\">\n<div class=\"titlebar\"><span class=\"stripe\"></span><span class=\"title\">Post</span>") {
+		t.Error("home: the Post window's title bar should have no close box")
+	}
 	for _, want := range []string{`<span class="title">Post</span>`, `<div class="frame"><div class="compose" id="compose">`, `Sign in with Solana`, `classList.add("wallet")`,
 		`class="btn profile-btn">Profile…</button>`, `<span class="grow who-wrap"><a class="me-av" aria-label="Your page" hidden><img alt=""></a><span class="who"><b class="name">`, `role="dialog" aria-modal="true" aria-label="Profile"`,
 		`<button type="button" class="btn left p-edit">Edit</button>`, `class="btn p-choose" hidden>Choose Picture…</button>`,

@@ -1155,6 +1155,10 @@ hub that carries the post.
   same line, or what changed since. The status line still begins at
   "Checking this address…": what it says next is the gate's verdict
   of the moment (a cooldown, a holding), not a thing to remember.
+  **No close box on the Post and Reply windows (2026-10-09).** The
+  box did nothing — the window is the page's, not one to put away — so
+  the bar is stripes and the title alone (Livid: "no need to show close
+  tile on the logged-in post box"), signed in or not.
   **A Sign in after Sign Out asks for a signature (2026-10-06).** Sign
   Out forgets the wallet here and asks it to disconnect, but the list
   of trusted sites is the wallet's: Glow, still trusting the hub,
