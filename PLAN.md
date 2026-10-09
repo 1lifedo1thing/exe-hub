@@ -1159,6 +1159,9 @@ hub that carries the post.
   box did nothing — the window is the page's, not one to put away — so
   the bar is stripes and the title alone (Livid: "no need to show close
   tile on the logged-in post box"), signed in or not.
+  The home page's feed window lost its box the same day ("it cannot be
+  closed on homepage"); a post's page keeps its box, the link back to
+  the feed.
   **A Sign in after Sign Out asks for a signature (2026-10-06).** Sign
   Out forgets the wallet here and asks it to disconnect, but the list
   of trusted sites is the wallet's: Glow, still trusting the hub,

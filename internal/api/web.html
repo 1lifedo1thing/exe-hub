@@ -987,8 +987,10 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 {{end}}
 <div class="main">
 {{with .Compose}}{{template "compose" .}}{{end}}
+{{/* the feed is the home page itself: nothing to close, no close box
+     (Livid, 2026-10-09); a post's page keeps its box, the way back */}}
 <div class="window feed">
-  <div class="titlebar"><span class="tbox"></span><span class="stripe"></span><span class="title">{{.Host}}</span><span class="stripe"></span></div>
+  <div class="titlebar"><span class="stripe"></span><span class="title">{{.Host}}</span><span class="stripe"></span></div>
   <div class="frame"{{if .Live}} data-live="feed"{{end}}>
     {{template "saved"}}
     {{template "find" .}}

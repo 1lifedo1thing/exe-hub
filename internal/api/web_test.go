@@ -1422,6 +1422,9 @@ func TestWebCompose(t *testing.T) {
 	if !strings.Contains(home, "<div class=\"window composer\">\n<div class=\"titlebar\"><span class=\"stripe\"></span><span class=\"title\">Post</span>") {
 		t.Error("home: the Post window's title bar should have no close box")
 	}
+	if !strings.Contains(home, "<div class=\"window feed\">\n  <div class=\"titlebar\"><span class=\"stripe\"></span><span class=\"title\">") {
+		t.Error("home: the feed window's title bar should have no close box")
+	}
 	for _, want := range []string{`<span class="title">Post</span>`, `<div class="frame"><div class="compose" id="compose">`, `Sign in with Solana`, `classList.add("wallet")`,
 		`class="btn profile-btn">Profile…</button>`, `<span class="grow who-wrap"><a class="me-av" aria-label="Your page" hidden><img alt=""></a><span class="who"><b class="name">`, `role="dialog" aria-modal="true" aria-label="Profile"`,
 		`<button type="button" class="btn left p-edit">Edit</button>`, `class="btn p-choose" hidden>Choose Picture…</button>`,
