@@ -74,7 +74,12 @@ a.mention { text-decoration: none; }
 .desk { max-width: 640px; margin: 0 auto; }
 @media (min-width: 1060px) {
   .desk { max-width: none; display: flex; align-items: flex-start; justify-content: center; gap: 24px; }
-  .desk .join, .desk > .nav { flex: 0 0 360px; position: sticky; top: 24px; margin: 0; }
+  .desk .join { flex: 0 0 360px; position: sticky; top: 24px; margin: 0; }
+  /* the Navigation window is narrower than the join window whose place it
+     takes — four rows need no more (Livid, 2026-10-09: "a bit too wide")
+     — and stands at the right of that place, against the column, so the
+     column stays where it was: 200px and 160px of the 360 */
+  .desk > .nav { flex: 0 0 200px; position: sticky; top: 24px; margin: 0 0 0 160px; }
   .desk .main { flex: 0 1 640px; min-width: 0; }
   .desk .main > .window:last-child { margin-bottom: 0; }
 }
@@ -111,6 +116,7 @@ a.mention { text-decoration: none; }
 @media (min-width: 1060px) {
   .desk .side:has(> .summary), .wallet .desk .side { display: block; flex: 0 0 360px; position: sticky; top: 24px; }
   .desk .side .window { margin: 0; }
+  .desk .side .nav { width: 200px; margin-left: auto; }
   .wallet .desk .side .nav ~ .summary { margin-top: 22px; }
 }
 

@@ -1760,8 +1760,12 @@ bookmark op for post), Profile".
   desk with the Navigation window at its side, so the column stays where
   the feed's is: the home page (in the join window's place), a thread
   (its side, above the Summary window), Notifications, Bookmarks and a
-  profile page. From 1060px it is the side's 360px window, sticky as the
-  join window is. Narrower, on the home page, Notifications, Bookmarks
+  profile page. From 1060px it stands in the side's 360px, sticky as the
+  join window is, but 200px wide (Livid, 2026-10-09: the full 360 was "a
+  bit too wide"), at the right of the side against the column, so the
+  column stays where it was — signing in moves nothing but the join
+  window, and a thread's Summary (360px) still lines up under it at the
+  right. Narrower, on the home page, Notifications, Bookmarks
   and a profile, it is a strip at the top of the column — the four as
   tiles across, each glyph over its word — where the join window stood
   and where a signed-in reader on a phone had nothing (the feed still
