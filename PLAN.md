@@ -1164,9 +1164,24 @@ hub that carries the post.
   the profile's name and picture CID beside the id, and a script
   inside the Post window, right after the who line's markup, draws
   them as the page is parsed; the answer on this visit redraws the
-  same line, or what changed since. The status line still begins at
-  "Checking this address…": what it says next is the gate's verdict
-  of the moment (a cooldown, a holding), not a thing to remember.
+  same line, or what changed since. **The status line too
+  (2026-10-09)**: it began at "Checking this address…" on every load
+  (Livid: "every time i refresh page this message flashes … i feel
+  it's unnecessary"). The gate's all-clear is remembered beside the
+  wallet (`ready`, with the cooldown and when a running one ends), and a
+  script after the status row draws the line it will be — "Each post
+  asks your wallet for one signature.", or the cooldown counting down
+  after a post — and readies Picture… and Draw… from the first paint;
+  the compose script takes the remembered all-clear as a stand-in
+  verdict while the check is made again, and only an answer that
+  differs (a holding fallen short, a ban, an unreachable RPC) changes
+  the line. A first sign-in, or another account, shows the check once.
+  The stand-in is no answer: a check that cannot land is retried behind
+  it, and while the hub cannot be reached the buttons wait. A press in
+  the moment before the remembered wallet resumes (about 300 ms) does
+  nothing, as before; the browser checks wait for the page's
+  `/v1/gate` request instead of the line
+  (`~/tools/playwright/exe-hub-quiet-check-test.js`).
   **No close box on the Post and Reply windows (2026-10-09).** The
   box did nothing — the window is the page's, not one to put away — so
   the bar is stripes and the title alone (Livid: "no need to show close

@@ -2247,7 +2247,7 @@ document.addEventListener("change", e => {
     clearTimeout(timer);
     const v = verdict;
     const left = Math.max(0, Math.ceil((until - Date.now()) / 1000));
-    const can = !!v && !v.banned && v.gate !== "below" && v.gate !== "unavailable";
+    const can = !!v && !(v.provisional && retry) && !v.banned && v.gate !== "below" && v.gate !== "unavailable";
     const t = text.value.trim();
     const over = bytes(t) - MAX_TEXT;
     // words or a picture make a post; a picture still on its way holds it
@@ -2319,7 +2319,8 @@ document.addEventListener("change", e => {
     // line is drawn from as the page is parsed (the compose window's own
     // script), so it shows them from the first paint
     remember({ name: me.name, address: me.address, id: st.v.profile,
-      pname: st.profile && st.profile.name || "", ava: st.profile && st.profile.avatar || "" });
+      pname: st.profile && st.profile.name || "", ava: st.profile && st.profile.avatar || "",
+      ready: !st.v.banned && st.v.gate !== "below" && st.v.gate !== "unavailable", cooldown: st.v.cooldown || 0, until });
     // and the Notify subscription follows it (the Notify script listens),
     // and the Navigation window's links, and the kept posts
     document.dispatchEvent(new CustomEvent("exe-hub-id", { detail: st.v.profile }));
@@ -2342,8 +2343,24 @@ document.addEventListener("change", e => {
   const pulse = Object.assign(document.createElement("span"), { className: "pulse",
     innerHTML: '<svg viewBox="0 0 8 8" width="8" height="8" aria-hidden="true"><path d="M2 0h4v1h-4zM1 1h6v1h-6zM0 2h8v4h-8zM1 6h6v1h-6zM2 7h4v1h-4z"/></svg>' });
   pulse.setAttribute("role", "img");
+  // The gate's answer last time, when it was the all-clear: it stands in
+  // while the check is made again, so a returning reader's line reads as
+  // it will (Livid, 2026-10-09: "Checking this address…" on every reload
+  // was a flash for nothing), and only an answer that differs — a
+  // cooldown, a holding that fell short, a ban — changes it. A first
+  // sign-in, or another account, has none and shows the check.
+  // A cooldown still running stands in with it, so a reload right after
+  // a post counts down from the first paint too.
+  function cleared() {
+    const w = recall();
+    if (!me || !w || w.address !== me.address || !w.ready) return null;
+    if (w.until > Date.now()) until = w.until;
+    return { gate: "pass", banned: false, cooldown: w.cooldown || 0, wait: 0, provisional: true };
+  }
+  // the end of the running cooldown, remembered with the wallet
+  const keepUntil = () => { const w = recall(); if (w && me && w.address === me.address) remember(Object.assign(w, { until })); };
   async function check() {
-    verdict = null;
+    verdict = cleared();
     clearTimeout(away);
     checking = true;
     render();
@@ -2358,10 +2375,12 @@ document.addEventListener("change", e => {
         retry = e.message;
         away = setTimeout(recheck, backoff = Math.min(backoff ? backoff * 2 : 2000, 15000));
         render();
-      } else { retry = ""; tell(e.message); }
+      } else { retry = ""; if (verdict && verdict.provisional) verdict = null; tell(e.message); }
     } finally { checking = false; }
   }
-  const recheck = () => { if (me && !verdict && !checking && !busy && !document.hidden) check(); };
+  // a check that could not land is made again; the remembered all-clear
+  // standing in meanwhile is no answer
+  const recheck = () => { if (me && (!verdict || verdict.provisional) && !checking && !busy && !document.hidden) check(); };
   addEventListener("online", recheck);
   document.addEventListener("visibilitychange", recheck);
 
@@ -2555,7 +2574,7 @@ document.addEventListener("change", e => {
     // (the clock and the gate below are the window's: they follow this
     // answer only while the window is still this send's account's)
     if (r.status === 429) {
-      if (me === who) until = Date.now() + (parseInt(r.headers.get("Retry-After"), 10) || verdict && verdict.cooldown || 60) * 1000;
+      if (me === who) { until = Date.now() + (parseInt(r.headers.get("Retry-After"), 10) || verdict && verdict.cooldown || 60) * 1000; keepUntil(); }
       throw new Error("");
     }
     if (r.status === 403 && me === who) { await check(); if (verdict && verdict.gate === "below") throw new Error(""); }
@@ -2957,7 +2976,7 @@ document.addEventListener("change", e => {
     text.value = "";
     picked.clear();
     if (target && target.id === to) { target = null; showTarget(); }
-    if (me === who && verdict && verdict.cooldown) until = Date.now() + verdict.cooldown * 1000;
+    if (me === who && verdict && verdict.cooldown) { until = Date.now() + verdict.cooldown * 1000; keepUntil(); }
     // a live page brings it in (a reply is landed on); a static one loads again, a thread at the new reply
     if (!window.hubRefresh) {
       if (!replyTo) { if (box.dataset.away !== undefined) location.href = feedHref(); else location.reload(); return false; }
@@ -3912,6 +3931,14 @@ document.addEventListener("change", e => {
     {{end}}<div class="field"><textarea class="text" placeholder="{{if .ReplyTo}}{{T "placeholder.reply"}}{{else}}{{T "placeholder.post"}}{{end}}" aria-label="{{if .ReplyTo}}{{T "text.reply"}}{{else}}{{T "text.post"}}{{end}}"></textarea><div class="at-list" role="listbox" aria-label="{{T "mention"}}" hidden></div></div>
     <div class="atts"></div><input type="file" class="att-file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden><template class="att-tpl"><div class="row att-row"><span class="att-th"><img alt=""></span><span class="grow att-q"><b class="att-name"></b> <span class="att-size"></span></span><button type="button" class="btn re-clear att-x">{{template "cross"}}</button></div></template>
     <div class="row"><span class="grow status">{{T "checking"}}</span><button type="button" class="btn att-btn" aria-label="{{T "attach"}}" disabled>{{template "clip"}}<span>{{T "attach"}}</span></button><button type="button" class="btn draw-btn" aria-label="{{T "draw"}}" disabled>{{template "pad"}}<span>{{T "draw"}}</span></button><button type="button" class="btn send" disabled>{{if .ReplyTo}}{{T "reply"}}{{else}}{{T "post"}}{{end}}</button></div>
+    <script>// a wallet the gate cleared last time: its usual line, and Picture… and Draw… ready, from the first paint — the check is made again quietly
+    (() => { try {
+      const w = JSON.parse(localStorage.getItem("exe-hub-wallet") || "null"), row = document.currentScript.previousElementSibling;
+      if (!w || !w.ready) return;
+      const left = Math.ceil(((w.until || 0) - Date.now()) / 1000);
+      row.querySelector(".status").textContent = left > 0 ? {{if .ReplyTo}}T("again.reply", { s: left }){{else}}T("again.post", { s: left }){{end}} : {{if .ReplyTo}}T("each.reply"){{else}}T("each.post"){{end}};
+      for (const b of row.querySelectorAll(".att-btn, .draw-btn")) b.disabled = false;
+    } catch (e) {} })();</script>
   </div>
   <div class="veil" hidden>
     <div class="dlg" role="dialog" aria-modal="true" aria-label="{{T "profile.title"}}">
