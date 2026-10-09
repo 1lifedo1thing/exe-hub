@@ -1086,6 +1086,58 @@ func TestWebArchive(t *testing.T) {
 	}
 }
 
+// TestWebYouTube: a card whose link is a YouTube video that plays on
+// other sites carries its picture across the card as a Play link to the
+// video, the id and the link's start time on the box for the script, and
+// no small picture beside the title; a video whose owner keeps it on
+// YouTube, and any other card, stay as they were (PLAN.md, YouTube
+// players).
+func TestWebYouTube(t *testing.T) {
+	s := testServer(t, &config.Config{Gate: config.Gate{Mode: "open"}})
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	const pic = "bafkreibf7dvsnvwpeemxxpudj7miznz2ng4e7njfd2ry5dmfmvasbz6soi"
+	const link = "https://youtu.be/dQw4w9WgXcQ?t=1m30s"
+	yt := ingest(t, s, priv, pub, 1, "post.create", map[string]any{"text": "watch " + link})
+	if _, err := s.St.SetCard(yt, store.Card{URL: link, Host: "youtu.be", Title: "A Video", Image: pic, Plays: true}, 1000, "image/jpeg", true); err != nil {
+		t.Fatal(err)
+	}
+	page := ingest(t, s, priv, pub, 2, "post.create", map[string]any{"text": "read https://a.example/x"})
+	if _, err := s.St.SetCard(page, store.Card{URL: "https://a.example/x", Host: "a.example", Title: "A Page", Image: pic}, 1000, "image/jpeg", true); err != nil {
+		t.Fatal(err)
+	}
+	kept := ingest(t, s, priv, pub, 3, "post.create", map[string]any{"text": "https://www.youtube.com/watch?v=bbbbbbbbbbb"})
+	if _, err := s.St.SetCard(kept, store.Card{URL: "https://www.youtube.com/watch?v=bbbbbbbbbbb", Host: "youtube.com", Title: "Kept", Image: pic}, 1000, "image/jpeg", true); err != nil {
+		t.Fatal(err)
+	}
+	h := s.Handler()
+	for _, path := range []string{"/", "/p/" + yt, "/?lang=zh"} {
+		_, body := get(t, h, path)
+		play := "Play"
+		if path == "/?lang=zh" {
+			play = "播放"
+		}
+		want := `<div class="card yt"><div class="ytv" data-yt="dQw4w9WgXcQ" data-start="90"><a class="ytgo" href="` + link + `" target="_blank" rel="noopener nofollow"><img src="/v1/embed/` + pic + `" alt="" loading="lazy"><span class="btn"><svg class="gl" viewBox="0 0 5 9"`
+		if !strings.Contains(body, want) || !strings.Contains(body, `</svg>`+play+`</span></a></div><a class="cm" href="`+link+`" target="_blank" rel="noopener nofollow"><span class="cb"><span class="ct">A Video</span>`) {
+			t.Errorf("%s: no player on the YouTube card:\n%s", path, body[strings.Index(body, `<div class="card`):][:700])
+		}
+	}
+	_, body := get(t, h, "/")
+	for _, u := range []string{"https://a.example/x", "https://www.youtube.com/watch?v=bbbbbbbbbbb"} {
+		if !strings.Contains(body, `<div class="card"><a class="cm" href="`+u+`" target="_blank" rel="noopener nofollow"><span class="ci"><img src="/v1/embed/`+pic+`"`) {
+			t.Errorf("the card for %s is not an ordinary card", u)
+		}
+	}
+	if n := strings.Count(body, `class="ytv"`); n != 1 {
+		t.Errorf("%d players on the feed, want 1", n)
+	}
+	if _, js := get(t, h, "/v1/post/"+yt); !strings.Contains(js, `"plays":true`) {
+		t.Errorf("JSON card without plays: %s", js)
+	}
+	if _, js := get(t, h, "/v1/post/"+kept); strings.Contains(js, `"plays"`) {
+		t.Errorf("JSON card of a kept video says plays: %s", js)
+	}
+}
+
 // TestWebPage: an HTML embed from an admin key renders as a page card
 // that the script opens in a sandboxed window, with a download link
 // beside it; the same file from any other key stays a file link, and

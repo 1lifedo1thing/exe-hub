@@ -361,6 +361,10 @@ CREATE TABLE IF NOT EXISTS translation_notes (
 		// page (PLAN.md, Post cards): the quoted post's whole id, '' for
 		// a link card
 		`ALTER TABLE cards ADD COLUMN quote TEXT NOT NULL DEFAULT ''`,
+		// whether the card's link is a video that plays on other sites
+		// (PLAN.md, YouTube players): 1 yes, 0 no, -1 not asked yet — the
+		// cards from before the column, and an ask that got no answer
+		`ALTER TABLE cards ADD COLUMN plays INTEGER NOT NULL DEFAULT -1`,
 		// whom a subscription is for (PLAN.md, Notifications): the
 		// profile id its browser was signed in as, '' for every post
 		`ALTER TABLE push_subs ADD COLUMN profile TEXT NOT NULL DEFAULT ''`,
@@ -1060,6 +1064,12 @@ type Card struct {
 	Image string `json:"image,omitempty"` // pinned CID, served by /v1/embed
 	// the page's copy in the Wayback Machine, https://web.archive.org/web/<timestamp>/<link>
 	Archive string `json:"archive,omitempty"`
+	// the link is a YouTube video whose owner lets it play on other
+	// sites: the card plays it in place (PLAN.md, YouTube players)
+	Plays bool `json:"plays,omitempty"`
+	// written only: YouTube was asked whether the video plays and gave no
+	// answer, so the start-up pass asks again
+	PlaysUnknown bool `json:"-"`
 }
 
 // Picture is one linked picture as the feed serves it: the IPFS link as
@@ -1102,7 +1112,7 @@ func (c Card) ArchiveDate() string {
 
 const feedCols = `p.id, p.author, IFNULL(pr.name,''), IFNULL(pr.avatar,''), p.text, p.reply_to, p.ts, p.received, p.activity, p.last_reply,
   (SELECT COUNT(*) FROM posts r WHERE r.reply_to = p.id),
-  IFNULL(cd.url,''), IFNULL(cd.host,''), IFNULL(cd.title,''), IFNULL(cd.descr,''), IFNULL(cd.image,''), IFNULL(cd.archive,''), IFNULL(cd.quote,''),
+  IFNULL(cd.url,''), IFNULL(cd.host,''), IFNULL(cd.title,''), IFNULL(cd.descr,''), IFNULL(cd.image,''), IFNULL(cd.archive,''), IFNULL(cd.quote,''), IFNULL(cd.plays,0),
   IFNULL((SELECT lg.lang FROM langs lg WHERE lg.post = p.id AND lg.status = 'ok'),'')`
 
 const feedQuery = `
@@ -1118,10 +1128,12 @@ func (s *Store) scanFeed(rows *sql.Rows) ([]FeedPost, error) {
 		var p FeedPost
 		var c Card
 		var lr, quote string
+		var plays int
 		if err := rows.Scan(&p.ID, &p.Author, &p.AuthorName, &p.Avatar, &p.Text, &p.ReplyTo, &p.TS, &p.Received, &p.Activity, &lr, &p.Replies,
-			&c.URL, &c.Host, &c.Title, &c.Desc, &c.Image, &c.Archive, &quote, &p.Lang); err != nil {
+			&c.URL, &c.Host, &c.Title, &c.Desc, &c.Image, &c.Archive, &quote, &plays, &p.Lang); err != nil {
 			return nil, err
 		}
+		c.Plays = plays == 1
 		if c.URL != "" && quote == "" {
 			p.Card = &c
 		}
@@ -1429,11 +1441,17 @@ func (s *Store) setCard(post string, c Card, quote, status string, imageSize int
 			return nil, err
 		}
 	}
-	if _, err := tx.Exec(`INSERT INTO cards (post, url, host, title, descr, image, quote, status, ts) VALUES (?,?,?,?,?,?,?,?,?)
+	plays := 0
+	if c.Plays {
+		plays = 1
+	} else if c.PlaysUnknown {
+		plays = -1
+	}
+	if _, err := tx.Exec(`INSERT INTO cards (post, url, host, title, descr, image, quote, status, ts, plays) VALUES (?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(post) DO UPDATE SET url=excluded.url, host=excluded.host, title=excluded.title,
 		descr=excluded.descr, image=excluded.image, quote=excluded.quote, status=excluded.status, ts=excluded.ts,
-		archive='', archive_tries=0, archive_ts=0`,
-		post, c.URL, c.Host, c.Title, c.Desc, c.Image, quote, status, time.Now().UnixMilli()); err != nil {
+		plays=excluded.plays, archive='', archive_tries=0, archive_ts=0`,
+		post, c.URL, c.Host, c.Title, c.Desc, c.Image, quote, status, time.Now().UnixMilli(), plays); err != nil {
 		return nil, err
 	}
 	return unpin, tx.Commit()
@@ -1660,6 +1678,38 @@ func (s *Store) BeginArchive(post string, maxTries int, before int64) (link stri
 		return "", nil
 	}
 	return link, err
+}
+
+// CardsUnasked lists the posts whose ok link card has not been asked
+// whether its link plays in place — the cards from before YouTube
+// players, and a YouTube link whose ask got no answer (PLAN.md, YouTube
+// players). Text carries the card's link.
+func (s *Store) CardsUnasked() ([]CardPost, error) {
+	rows, err := s.db.Query(`SELECT p.id, p.author, c.url FROM cards c JOIN posts p ON p.id = c.post
+		WHERE c.plays < 0 AND c.status = 'ok' AND c.quote = ''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []CardPost
+	for rows.Next() {
+		var p CardPost
+		if err := rows.Scan(&p.ID, &p.Author, &p.Text); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// SetPlays records whether the card's link plays in place.
+func (s *Store) SetPlays(post string, plays bool) error {
+	v := 0
+	if plays {
+		v = 1
+	}
+	_, err := s.db.Exec(`UPDATE cards SET plays = ? WHERE post = ?`, v, post)
+	return err
 }
 
 // SetArchive records the card's archived copy.

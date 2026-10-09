@@ -768,6 +768,19 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 .card .qav img.idn { width: 10px; height: 10px; padding: 2px; }
 .card .qt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; margin-top: 3px; line-height: 16px; overflow-wrap: anywhere; }
 .card .cm:hover .qh b { text-decoration: underline; }
+/* a YouTube card (PLAN.md, YouTube players): the video's picture stands
+   above the title across the card, 16:9, a Play button on it. A press
+   puts YouTube's player in that box at the same size, so nothing below
+   moves; until then nothing on the page is asked of YouTube. The box's
+   foot is the one line between it and the title. */
+.card .ytv { position: relative; aspect-ratio: 16 / 9; background: #000; border-bottom: 1px solid #262626; }
+.card .ytgo, .card .ytv iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: flex; align-items: center; justify-content: center; }
+.card .ytgo { text-decoration: none; }
+.card .ytgo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.card .ytgo .btn { position: relative; display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 2px 13px 2px 11px; }
+.card .ytgo .btn .gl { width: 5px; }
+.card .ytgo:active .btn { background: var(--g800); color: #fff;
+  box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888, inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
 /* the card's page kept in the Internet Archive: the card's foot, a quieter
    grey with no rule above it */
 .card .arch { display: block; padding: 4px 9px 3px; background: #eee; font-size: 11px; text-decoration: none;
@@ -980,6 +993,9 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 .paper .card .qh b { color: var(--ink); font-size: 13px; }
 .paper .card .qav { border: 0; background: none; }
 .paper .card .arch { background: var(--wash); }
+.paper .card .ytv { border-bottom-color: var(--rule); }
+.paper .card .ytgo .btn { background: var(--ground); }
+.paper .card .ytgo:active .btn { background: var(--ink); color: var(--ground); box-shadow: none; }
 .paper .embeds img { border: 0; }
 .paper .embeds .vid { border: 0; }
 .paper .embeds .aud { border-color: var(--rule); background: var(--field); box-shadow: none; }
@@ -1216,6 +1232,30 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
   const thread = feed.dataset.live === "thread";
   const key = n => n.id || n.className; // a post's id; "pager top", "statusbar" for the chrome around them
   const sent = root => new Map([...root.children].map(n => [key(n), n.outerHTML]));
+  // a changed post whose YouTube player was started (PLAN.md, YouTube
+  // players) is patched around the player instead of replaced, since an
+  // iframe taken out of the page and put back loads again, from the
+  // start: down the path from the post to the player each node stays,
+  // taking the fresh copy's attributes and its other children. A player
+  // the fresh copy no longer has goes with the post.
+  const around = (old, n) => {
+    const f = old.querySelector(".ytv iframe"), box = f && f.parentNode;
+    const to = box && n.querySelector('.ytv[data-yt="' + box.dataset.yt + '"]');
+    if (!to) return n;
+    const graft = (o, x) => {
+      if (x === to) return;
+      for (const a of [...o.attributes]) if (!x.hasAttribute(a.name)) o.removeAttribute(a.name);
+      for (const a of [...x.attributes]) o.setAttribute(a.name, a.value);
+      const xo = [...x.children].find(c => c.contains(to)), oo = [...o.children].find(c => c.contains(box));
+      const kids = [...x.childNodes].map(c => c === xo ? oo : c);
+      for (const c of [...o.childNodes]) if (!kids.includes(c)) c.remove();
+      // only the others move: the path's node is never taken out
+      kids.forEach((c, i) => { if (o.childNodes[i] !== c) o.insertBefore(c, o.childNodes[i] || null); });
+      graft(oo, xo);
+    };
+    graft(old, n);
+    return old;
+  };
   let served = sent(feed), land = "";
   let sideServed = (document.querySelector(".window.summary") || {}).outerHTML || "";
   const swap = html => {
@@ -1237,7 +1277,8 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
     const next = [...fresh.children].map(n => {
       const k = key(n), old = have.get(k);
       // the find strip is the reader's (what they typed, the Notify box)
-      return old && (k === "find" || served.get(k) === now.get(k)) ? old : n;
+      if (old && (k === "find" || served.get(k) === now.get(k))) return old;
+      return old ? around(old, n) : n;
     });
     served = now;
     // the reader's place: the first thing staying that they can see holds
@@ -1946,6 +1987,45 @@ document.addEventListener("change", e => {
       if (st && st.seen && !st.held && v.paused) start(v);
     }
   });
+})();
+</script>
+<script>
+// YouTube players (PLAN.md, YouTube players). A YouTube card's picture
+// is a link to the video; pressed here, it gives way to YouTube's player
+// in the same box, playing, from the privacy-enhanced host, so YouTube
+// hears of the page only from a reader who asked. One plays at a time:
+// starting one pauses the others, and a hub video given its sound pauses
+// them all. A press with a modifier key, or a page without script,
+// follows the link to YouTube.
+(() => {
+  const HOST = "https://www.youtube-nocookie.com";
+  const pause = but => {
+    for (const f of document.querySelectorAll(".ytv iframe")) if (f !== but) {
+      try { f.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":""}', HOST); } catch (e) {}
+    }
+  };
+  document.addEventListener("click", e => {
+    const a = e.target.closest && e.target.closest(".ytgo");
+    if (!a || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    const box = a.parentNode, t = box.closest(".card").querySelector(".ct");
+    const q = new URLSearchParams({ autoplay: 1, playsinline: 1, rel: 0, enablejsapi: 1, origin: location.origin });
+    if (box.dataset.start) q.set("start", box.dataset.start);
+    const f = document.createElement("iframe");
+    f.src = HOST + "/embed/" + box.dataset.yt + "?" + q;
+    f.title = t ? t.textContent : "YouTube";
+    f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+    f.allowFullscreen = true;
+    // YouTube's player refuses to play without the page's origin
+    f.referrerPolicy = "strict-origin-when-cross-origin";
+    pause(f);
+    for (const v of document.querySelectorAll(".embeds video")) v.muted = true;
+    box.replaceChildren(f);
+    if (e.detail === 0) f.focus(); // pressed from the keyboard: the keys go on to the player
+  });
+  document.addEventListener("volumechange", e => {
+    if (e.target.matches && e.target.matches(".embeds video") && !e.target.muted) pause();
+  }, true);
 })();
 </script>
 {{if .Push}}<script>
@@ -3956,6 +4036,7 @@ document.addEventListener("change", e => {
 {{/* the Hub app's back arrow, verbatim (sysapps/hub/index.html), and
      the same glyph mirrored (x → 10 − x) pointing on, for Next */}}
 {{define "arrow"}}<svg class="gl" viewBox="0 0 11 9" width="11" height="9" aria-hidden="true"><path class="k" d="M4 0h1v1h-1zM3 1h2v1h-2zM2 2h3v1h-3zM1 3h10v1h-10zM0 4h11v1h-11zM1 5h10v1h-10zM2 6h3v1h-3zM3 7h2v1h-2zM4 8h1v1h-1z"/></svg>{{end}}
+{{define "play"}}<svg class="gl" viewBox="0 0 5 9" width="5" height="9" aria-hidden="true"><path class="k" d="M0 0h1v1h-1zM0 1h2v1h-2zM0 2h3v1h-3zM0 3h4v1h-4zM0 4h5v1h-5zM0 5h4v1h-4zM0 6h3v1h-3zM0 7h2v1h-2zM0 8h1v1h-1z"/></svg>{{end}}
 {{define "arrow-r"}}<svg class="gl" viewBox="0 0 11 9" width="11" height="9" aria-hidden="true"><path class="k" d="M6 0h1v1h-1zM6 1h2v1h-2zM6 2h3v1h-3zM0 3h10v1h-10zM0 4h11v1h-11zM0 5h10v1h-10zM6 6h3v1h-3zM6 7h2v1h-2zM6 8h1v1h-1z"/></svg>{{end}}
 
 {{/* the cross on the button that lets a reply go: 8×8, two 1px
@@ -4032,7 +4113,7 @@ try { const w = JSON.parse(localStorage.getItem("exe-hub-wallet") || "null"); hu
   <div>
     {{template "keep" .}}<div class="meta"><a href="/u/{{.Author}}{{.Q}}"><b>{{if .AuthorName}}{{.AuthorName}}{{else}}{{.Author}}{{end}}</b></a> <span class="mono">{{.Author}}</span> · <a href="/p/{{.ID}}{{.Q}}"><time datetime="{{.Stamp}}">{{.When}}</time></a>{{if .Why}} · <a class="why" href="/p/{{if .ReplyTo}}{{.ReplyTo}}{{else}}{{.ID}}{{end}}{{.Q}}">{{T (print "why." .Why)}}</a>{{else if .ReplyTo}}{{if .InThread}}{{if gt .Depth 1}} · <a href="{{.ParentHref}}">{{T "inreply.name" "name" .ParentName}}</a>{{end}}{{else}}{{if not (or .Quote .QuoteRun)}} · <a href="/p/{{.ReplyTo}}{{.Q}}">{{T "inreply"}}</a>{{end}}{{end}}{{end}}</div>
     {{if .Text}}{{with .Tr}}<div class="text" lang="{{.Lang}}"{{if .Orig}} hidden{{end}}>{{.HTML}}</div>{{end}}<div class="text"{{if .Lang}} lang="{{.Lang}}"{{end}}{{if and .Tr (not .Tr.Orig)}} hidden{{end}}>{{.HTML}}</div>{{with .Tr}}<div class="trl"><span{{if .Orig}} hidden{{end}}>{{.Note}} · </span><a class="tro" role="button" href="/p/{{$.ID}}{{if .Orig}}{{$.Q}}{{else}}?lang=orig{{end}}" data-other="{{if .Orig}}{{.Show}}{{else}}{{.Back}}{{end}}">{{if .Orig}}{{.Back}}{{else}}{{.Show}}{{end}}</a></div>{{end}}{{end}}
-    {{if .Card}}<div class="card"><a class="cm" href="{{.Card.URL}}" target="_blank" rel="noopener nofollow">{{if .Card.Image}}<span class="ci"><img src="/v1/embed/{{.Card.Image}}" alt="" loading="lazy"></span>{{end}}<span class="cb"><span class="ct">{{.Card.Title}}</span>{{if .Card.Desc}}<span class="cd">{{.Card.Desc}}</span>{{end}}<span class="ch">{{.Card.Host}}</span></span></a>{{if .Card.Archive}}<a class="arch" href="{{.Card.Archive}}" target="_blank" rel="noopener nofollow">{{T "archived"}}{{with .Card.ArchiveDate}} · {{.}}{{end}}</a>{{end}}</div>{{end}}
+    {{if .Card}}<div class="card{{if .Player}} yt{{end}}">{{with .Player}}<div class="ytv" data-yt="{{.ID}}"{{if .Start}} data-start="{{.Start}}"{{end}}><a class="ytgo" href="{{$.Card.URL}}" target="_blank" rel="noopener nofollow">{{if $.Card.Image}}<img src="/v1/embed/{{$.Card.Image}}" alt="" loading="lazy">{{end}}<span class="btn">{{template "play"}}{{T "play"}}</span></a></div>{{end}}<a class="cm" href="{{.Card.URL}}" target="_blank" rel="noopener nofollow">{{if and .Card.Image (not .Player)}}<span class="ci"><img src="/v1/embed/{{.Card.Image}}" alt="" loading="lazy"></span>{{end}}<span class="cb"><span class="ct">{{.Card.Title}}</span>{{if .Card.Desc}}<span class="cd">{{.Card.Desc}}</span>{{end}}<span class="ch">{{.Card.Host}}</span></span></a>{{if .Card.Archive}}<a class="arch" href="{{.Card.Archive}}" target="_blank" rel="noopener nofollow">{{T "archived"}}{{with .Card.ArchiveDate}} · {{.}}{{end}}</a>{{end}}</div>{{end}}
     {{with .PostCard}}<div class="card qcard"><a class="cm" href="/p/{{.ID}}{{$.Q}}">{{if .Image}}<span class="ci"><img src="/v1/embed/{{.Image}}" alt="" loading="lazy"></span>{{end}}<span class="cb"><span class="qh"><span class="qav">{{if .Avatar}}<img src="/v1/embed/{{.Avatar}}" alt="">{{else}}<img class="idn" src="/v1/identicon/{{.Author}}.svg" alt="">{{end}}</span><b>{{.Name}}</b><span class="mono">{{.Author}}</span><span class="qw">· <time datetime="{{.Stamp}}">{{.When}}</time></span></span>{{if .Text}}<span class="qt">{{.Text}}</span>{{end}}</span></a></div>{{end}}
     {{if or .Images .Pictures .Videos .Sounds .Files .Pages}}<div class="embeds">{{range .Images}}{{if .Drawing}}<div class="drawing"><a class="pic" href="/v1/embed/{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "picture"}}{{end}}"><img class="draw" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" data-src="/v1/embed/{{.CID}}" data-w="{{.Width}}" data-h="{{.Height}}" style="width:{{.Width}}px;height:{{.Height}}px" alt="{{.Alt}}"><noscript><img class="draw" src="/v1/embed/{{.CID}}" width="{{.Width}}" height="{{.Height}}" loading="lazy" alt=""></noscript></a><button type="button" class="btn again">{{T "replay"}}</button></div>{{else}}<a class="pic" href="/v1/embed/{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "picture"}}{{end}}"><img src="/v1/embed/{{.CID}}" alt="{{.Alt}}"></a>{{end}}{{end}}{{range .Pictures}}<a class="pic" href="/v1/embed/{{.CID}}" data-name="{{.Name}}" title="{{.URL}}"><img src="/v1/embed/{{.CID}}" alt=""></a>{{end}}{{range .Videos}}<div class="vid"{{if .Loop}} data-loop{{end}} style="{{.Box}}"><video src="/v1/embed/{{.CID}}"{{if .Poster}} poster="/v1/embed/{{.Poster}}"{{end}}{{if .Loop}} autoplay loop muted playsinline preload="auto"{{else}} controls playsinline preload="{{if .Poster}}none{{else}}metadata{{end}}"{{end}}{{if .Alt}} aria-label="{{.Alt}}"{{end}}></video></div>{{end}}{{range .Sounds}}<div class="aud">{{if .Poster}}<img class="wave" src="/v1/embed/{{.Poster}}" alt="">{{end}}<audio controls preload="none" src="/v1/embed/{{.CID}}"></audio><span class="afoot">{{if .Filename}}{{.Filename}}{{else}}{{T "sound"}}{{end}}{{with .Length}} · {{.}}{{end}}</span></div>{{end}}{{range .Pages}}<div><a class="page" href="/v1/embed/{{.CID}}" data-cid="{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "page"}}{{end}}">{{if .Filename}}{{.Filename}}{{else}}{{T "page"}}{{end}}</a><a class="pagedl" href="/v1/embed/{{.CID}}" download>{{T "download"}}</a></div>{{end}}{{range .Files}}<a class="file" href="/v1/embed/{{.CID}}">{{if .Filename}}{{.Filename}}{{else}}{{.CID}}{{end}} ({{.MIME}})</a>{{end}}</div>{{end}}
     {{if .InThread}}<div class="foot re"><a class="rlink" role="button" href="/p/{{.ID}}{{.Q}}">{{T "reply"}}</a>{{template "del" .}}</div>

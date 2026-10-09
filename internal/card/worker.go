@@ -135,6 +135,37 @@ func (w *Worker) Backfill() {
 	if n > 0 {
 		log.Printf("card backfill: %d cards quoting posts queued again", n)
 	}
+	// a card from before YouTube players, or one whose ask got no
+	// answer, is asked now — only a YouTube link costs a request; the
+	// page and its picture are not fetched again
+	unasked, err := w.St.CardsUnasked()
+	if err != nil {
+		log.Printf("card backfill: %v", err)
+		return
+	}
+	n = 0
+	for _, p := range unasked {
+		plays, known := false, true
+		if id, _ := YouTube(p.Text); id != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			plays, known = w.F.Plays(ctx, id)
+			cancel()
+			n++
+		}
+		if !known {
+			continue
+		}
+		if err := w.St.SetPlays(p.ID, plays); err != nil {
+			log.Printf("card backfill: %v", err)
+			return
+		}
+		if plays && w.Bus != nil {
+			w.Bus.Emit(events.Event{Type: "post.card", ID: p.ID, Author: p.Author})
+		}
+	}
+	if n > 0 {
+		log.Printf("card backfill: %d YouTube cards asked whether they play", n)
+	}
 	untried, err := w.St.PostsWithoutPictures(256)
 	if err != nil {
 		log.Printf("picture backfill: %v", err)
@@ -203,6 +234,13 @@ func (w *Worker) deriveCard(j job) {
 		return
 	}
 	c := store.Card{URL: link, Host: m.Host, Title: m.Title, Desc: m.Desc}
+	// a YouTube video plays in its card when its owner lets it play on
+	// other sites (PLAN.md, YouTube players)
+	if id, _ := YouTube(link); id != "" {
+		var known bool
+		c.Plays, known = w.F.Plays(ctx, id)
+		c.PlaysUnknown = !known
+	}
 	var size int64
 	mime := ""
 	if m.ImageURL != "" {

@@ -256,3 +256,69 @@ func TestPostCards(t *testing.T) {
 		}
 	}
 }
+
+// TestCardPlays: whether a card's link plays in place is read with the
+// card; a card from before the column, or one whose ask had no answer,
+// is listed until it has one (PLAN.md, YouTube players).
+func TestCardPlays(t *testing.T) {
+	s := openTest(t)
+	a := newAuthor(t)
+	yes := ingest(t, s, a, "post.create", map[string]any{"text": "https://youtu.be/aaaaaaaaaaa"})
+	no := ingest(t, s, a, "post.create", map[string]any{"text": "https://youtu.be/bbbbbbbbbbb"})
+	unknown := ingest(t, s, a, "post.create", map[string]any{"text": "https://youtu.be/ccccccccccc"})
+	old := ingest(t, s, a, "post.create", map[string]any{"text": "https://a.example/x"})
+	for id, c := range map[string]Card{
+		yes:     {URL: "https://youtu.be/aaaaaaaaaaa", Title: "Yes", Plays: true},
+		no:      {URL: "https://youtu.be/bbbbbbbbbbb", Title: "No"},
+		unknown: {URL: "https://youtu.be/ccccccccccc", Title: "Unknown", PlaysUnknown: true},
+		old:     {URL: "https://a.example/x", Title: "Old"},
+	} {
+		if _, err := s.SetCard(id, c, 0, "", true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// a card from before the column
+	if _, err := s.db.Exec(`UPDATE cards SET plays = -1 WHERE post = ?`, old); err != nil {
+		t.Fatal(err)
+	}
+	unasked := func() map[string]string {
+		ps, err := s.CardsUnasked()
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := map[string]string{}
+		for _, p := range ps {
+			m[p.ID] = p.Text
+		}
+		return m
+	}
+	if got := unasked(); len(got) != 2 || got[unknown] != "https://youtu.be/ccccccccccc" || got[old] != "https://a.example/x" {
+		t.Errorf("CardsUnasked = %v", got)
+	}
+	plays := func() map[string]bool {
+		posts, err := s.Feed("", 10, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m := map[string]bool{}
+		for _, p := range posts {
+			m[p.ID] = p.Card.Plays
+		}
+		return m
+	}
+	if got := plays(); !got[yes] || got[no] || got[unknown] || got[old] {
+		t.Errorf("plays read = %v", got)
+	}
+	if err := s.SetPlays(unknown, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPlays(old, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := unasked(); len(got) != 0 {
+		t.Errorf("CardsUnasked after the answers = %v", got)
+	}
+	if got := plays(); !got[unknown] || got[old] {
+		t.Errorf("plays read after the answers = %v", got)
+	}
+}

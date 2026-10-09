@@ -205,6 +205,7 @@ var webStrings = map[string]map[string]string{
 		"page":     "Page",
 		"download": "download",
 		"replay":   "Replay from Start", // under a drawing (PLAN.md, Drawings)
+		"play":     "Play",              // on a YouTube card's picture (PLAN.md, YouTube players)
 		// the picture and page viewer
 		"close":     "Close",
 		"zoom":      "Zoom",
@@ -430,6 +431,7 @@ var webStrings = map[string]map[string]string{
 		"page":                 "页面",
 		"download":             "下载",
 		"replay":               "从头重播",
+		"play":                 "播放",
 		"close":                "关闭",
 		"zoom":                 "缩放",
 		"loading":              "正在载入…",
@@ -644,6 +646,7 @@ var webStrings = map[string]map[string]string{
 		"page":                 "頁面",
 		"download":             "下載",
 		"replay":               "從頭重播",
+		"play":                 "播放",
 		"close":                "關閉",
 		"zoom":                 "縮放",
 		"loading":              "正在載入…",
@@ -854,6 +857,7 @@ var webStrings = map[string]map[string]string{
 		"page":                 "ページ",
 		"download":             "ダウンロード",
 		"replay":               "最初から再生",
+		"play":                 "再生",
 		"close":                "閉じる",
 		"zoom":                 "ズーム",
 		"loading":              "読み込み中…",

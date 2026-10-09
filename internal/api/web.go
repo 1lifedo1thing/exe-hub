@@ -283,6 +283,9 @@ type webPost struct {
 	// the post's first link is a post here: quoted as a post card in the
 	// link card's place (see PLAN.md, Post cards)
 	PostCard *webPostCard
+	// the post's card is a YouTube video's: its picture plays the video
+	// in place (see PLAN.md, YouTube players)
+	Player *webPlayer
 	// a root with replies: the thread's newest reply, on the foot line —
 	// the feed says what was said last instead of burying it
 	Latest *webLatest
@@ -419,6 +422,13 @@ type webPostCard struct {
 	Stamp  string
 	Text   string // an excerpt; "" for a post that is all pictures
 	Image  string
+}
+
+// webPlayer is the YouTube video a link card plays: the video's id and
+// the second the link starts it at.
+type webPlayer struct {
+	ID    string
+	Start int
 }
 
 // webMedia is a video or sound embed for the template: the player box's
@@ -1109,6 +1119,11 @@ func (s *Server) webPosts(rd webReading, posts []store.FeedPost) []webPost {
 			}
 			out[i].PostCard = &webPostCard{ID: q.ID, Author: q.Author, Name: name, Avatar: q.Avatar,
 				When: webWhen(q.TS), Stamp: webStamp(q.TS), Text: excerpt(card.NameMentions(said, p.Mentions), 300), Image: q.Image}
+		}
+		if p.Card != nil && p.Card.Plays {
+			if id, start := card.YouTube(p.Card.URL); id != "" {
+				out[i].Player = &webPlayer{ID: id, Start: start}
+			}
 		}
 		for _, e := range p.Embeds {
 			switch {

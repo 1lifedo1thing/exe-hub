@@ -2056,6 +2056,8 @@ idea; Livid said do it.
   envelope behind it) makes the live feed slide a finished card in.
 - **Unless the link is a post here**, which is quoted, not fetched: see
   Post cards.
+- **A YouTube video plays in its card** when its owner lets it play on
+  other sites: see YouTube players.
 
 ## Archived copies — a card's page kept in the Wayback Machine (built)
 
@@ -2142,6 +2144,75 @@ page — the hub quoting itself through a picture of itself.
   when the post is here now, derived again as a quote: the cards from
   before this feature, and a link to a post that arrived after its card
   was tried.
+
+## YouTube players — a video link played in its card (built 2026-10-09)
+
+A post whose first link is a YouTube video grows a card that plays it:
+the video's picture stands across the card, 16:9, above the title, host
+and Archive foot of the link card, with a Play button on it; a press
+puts YouTube's player in that box, playing. Asked by Livid 2026-10-09:
+"when user post a youtube url, can we show video player".
+
+- **The card, grown.** The player rides the link card and its rules:
+  the first link, a post without embeds, a card that was read. The
+  card's picture (YouTube's og:image, pinned like any card's) is the
+  poster, `object-fit: cover` on black; the small picture beside the
+  title is dropped, since the poster shows it. A card whose picture did
+  not come plays the same over black; a card that failed is no card,
+  so no player either.
+- **Which links.** `card.YouTube`: a watch page on www., m. or
+  music.youtube.com (`v=`), a youtu.be link, a `/shorts/`, `/live/`,
+  `/embed/` or `/v/` path, youtube-nocookie.com among them; the id is
+  eleven characters of YouTube's base64. The link's `t=` (or `start=`),
+  as `90`, `90s` or `1h2m3s`, is where the player starts; a playlist's
+  `list=` is dropped, the player shows the one video posted. A playlist
+  page, a channel or a look-alike host stays a link card.
+- **Only a video that plays elsewhere.** An owner can keep a video on
+  YouTube (embedding off), and its player then says only "Video
+  unavailable — Watch on YouTube": worse than the card. So the card
+  worker asks YouTube's oEmbed endpoint once, when the card is made
+  (`Fetcher.Plays`, through the guarded client): 200 plays; 401
+  (embedding off), 403, 404 and 400 do not; no connection, a timeout, a
+  429 or a 5xx is no answer. `cards.plays` keeps it: 1, 0, or -1 for not
+  asked — the cards from before this and an ask with no answer — and the
+  start-up backfill asks those (`CardsUnasked`; a link that is not
+  YouTube is set 0 with no request; the page and its picture are not
+  fetched again), emitting `post.card` for one that plays. Every hub
+  asks for itself, like the rest of a card. `FeedPost.card.plays` carries
+  it in every JSON read.
+- **Nothing from YouTube until a press.** The poster is the hub's own
+  copy, so a page with a YouTube card asks YouTube for nothing; the
+  player loads only when a reader presses Play, from
+  www.youtube-nocookie.com (the privacy-enhanced host) with
+  `autoplay=1&playsinline=1&rel=0&enablejsapi=1&origin=<page>` and the
+  start. The iframe carries `referrerpolicy="strict-origin-when-cross-origin"`
+  (YouTube's player refuses to play without the page's origin) and
+  `allow="autoplay; encrypted-media; picture-in-picture; fullscreen"`.
+  The poster is a link to the video, so a press with a modifier key, a
+  middle click or a page without script opens YouTube in a new tab.
+  From the keyboard (Return on the link) the focus goes on to the player.
+  A phone may want a second tap on YouTube's own button: iOS lets no
+  cross-origin frame start sound from a tap on the page around it.
+- **No jump.** The box has its final 16:9 shape before anything loads,
+  and the player takes it whole.
+- **One plays at a time.** Starting a player pauses the others (a
+  `pauseVideo` command posted to each, which `enablejsapi=1` lets in)
+  and mutes the hub's own videos; a hub video given its sound pauses
+  every player.
+- **Live pages keep it.** The live swap replaces a post whose served
+  HTML changed — a reply's count, the Archive foot landing — and an
+  iframe taken out of the page loads again from the start. So a changed
+  post whose player was started is patched around it instead: down the
+  path from the post to the player each node stays, taking the fresh
+  copy's attributes and other children, and the player's box is never
+  moved. A post the fresh page no longer has, or whose card no longer
+  plays that video, goes as before.
+- **Drawn.** Platinum: the box's foot is the one 1px line between it and
+  the title (the card's border is the rest), the shared `.btn` with a
+  5×9 crispEdges triangle and "Play" (播放, 再生) centred on the
+  picture, pressed with the whole poster. Paper (the replies frame):
+  the rule's colour for the line, the button on the page's ground,
+  inverted while pressed. The Hub app does not play them yet.
 
 ## Media — video, sound and animated pictures through ffmpeg (built)
 
