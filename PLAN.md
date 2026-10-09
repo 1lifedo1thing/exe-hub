@@ -1800,9 +1800,12 @@ bookmark op for post), Profile".
   window (the home page, a thread, Notifications, Bookmarks), for a
   signed-in reader only (Livid, 2026-10-09; it first stood on the foot
   line, which gave every post nobody answered a line of its own): a
-  small push button, Delete's size, holding a ribbon glyph, hollow when
-  the post is not kept and solid black when it is, its title saying
-  which ("Bookmark", "Remove bookmark"). It floats ahead of the meta
+  small push button, Delete's size, holding a ribbon glyph — a toggle
+  the way the Notify bell is (Livid, the same day: "use that bell
+  enabled style"): raised when the post is not kept, depressed when it
+  is, the bell's own rule, with the ribbon's white face darkened ×0.6
+  as the bell's gold is — its title saying which ("Bookmark", "Remove
+  bookmark"). It floats ahead of the meta
   line, whose clipping box then ends at the button, so a long line still
   ends in its ellipsis, and it keeps within the line's height, so the
   line is no taller. Shown by `<html class="wallet">`, which the head
@@ -1811,13 +1814,13 @@ bookmark op for post), Profile".
   turned over — one wallet prompt, as Delete is — the button turning at
   once and turning back if the hub refuses, and the status line saying
   "Bookmarked." or "Bookmark removed." A post taken off the list on the
-  Bookmarks page stays there, hollow, until the page loads again, so a
+  Bookmarks page stays there, raised, until the page loads again, so a
   press made by mistake is one press to undo. Which posts are kept: the
   ids from `/v1/profile/{id}/bookmarks/ids`, remembered on the browser
   (`exe-hub-bookmarks`, with the id they are for) so the next visit
-  draws them solid before the hub has answered; the page writes one CSS
-  rule for the posts on it (a `<style id="kept">`, as the own-post rule
-  is written), so a post the live page swaps in keeps its look.
+  draws them pressed before the hub has answered; the state is each
+  button's `aria-pressed`, set again for a post the live page swaps in
+  (an observer on the live frame).
 - **A Post window on Notifications and Bookmarks.** The Post window is
   the wallet strip: only a page that has it can sign, so those two pages
   carry it at the head of their column, as the home page does, for the

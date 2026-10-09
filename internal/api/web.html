@@ -306,7 +306,7 @@ html[data-saved] .saved { display: flex; }
 .push .find .bell { display: inline-flex; }
 .find .bell svg { width: 14px; height: 14px; display: block; shape-rendering: crispEdges; }
 .find .bell .k { fill: #262626; } .find .bell .f { fill: #ffcc33; } .find .bell .s { fill: #cc9933; } .find .bell .w { fill: #fff; }
-.find .bell[aria-pressed=true] { background: #666;
+.find .bell[aria-pressed=true], .post .bm[aria-pressed=true] { background: #666;
   box-shadow: inset 1px 1px 0 #444, inset -1px -1px 0 #888, inset 2px 2px 0 #555, inset -2px -2px 0 #777; }
 .find .bell[aria-pressed=true] .f { fill: #997a1f; } .find .bell[aria-pressed=true] .s { fill: #66511a; } .find .bell[aria-pressed=true] .w { fill: #ccaa44; }
 .find .bell:focus { outline: none; }
@@ -792,9 +792,11 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 /* Bookmark (PLAN.md, The signed-in reader's desk — Bookmarks): at the
    far right of every post's meta line — the author and the time — on a
    page with the Post window, for a signed-in reader (Livid, 2026-10-09).
-   Delete's small size, a ribbon glyph hollow when the post is not kept
-   and solid when it is — the rule naming the kept posts on the page
-   stands in a <style id="kept"> the compose script writes. It floats
+   Delete's small size, a ribbon glyph. A toggle the way the Notify bell
+   is (Livid, the same day): raised when the post is not kept, depressed
+   when it is — the bell's rule, above, shared — with the ribbon's white
+   face darkened as a selected icon's is, ×0.6, the bell's gold the same
+   (aria-pressed, which the compose script keeps). It floats
    ahead of the meta line, whose clipping box (overflow: hidden) then
    ends at the button, so a long line still ends in its ellipsis; the
    negative bottom margin keeps the 18px button within the line's own
@@ -806,6 +808,9 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
 @media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) { .post .bm svg { shape-rendering: geometricPrecision; } }
 .post .bm .k { fill: currentColor; }
 .post .bm .w { fill: #fff; }
+.post .bm[aria-pressed=true] .w { fill: #999; }
+.post .bm:focus { outline: none; }
+.post .bm:focus-visible { outline: 2px solid #9999fe; outline-offset: 1px; }
 /* why a post is among one's notifications, where "in reply to" stands */
 .meta .why { color: #333399; }
 .foot .del { display: none; margin: 0 0 0 auto; min-width: 0; height: auto;
@@ -2838,25 +2843,20 @@ document.addEventListener("change", e => {
   });
   // ---- bookmarks (PLAN.md, The signed-in reader's desk — Bookmarks) ----
   // Which posts the reader keeps: the hub's list of their ids, remembered
-  // on this browser with the id it is for, so a visit draws them solid
-  // before the hub has answered. One rule names the kept posts on the
-  // page (<style id="kept">), so a post the live page swaps in keeps its
-  // look. A press signs one post.bookmark with the state turned over —
-  // one prompt, as Delete is — the button turning at once and back if
-  // the hub refuses; a post taken off the Bookmarks page stays there,
-  // hollow, until the page loads again.
+  // on this browser with the id it is for, so a visit draws them pressed
+  // before the hub has answered. A kept post's button is pressed in
+  // (aria-pressed, the Notify bell's look), and a post the live page
+  // swaps in is pressed again as it lands. A press signs one
+  // post.bookmark with the state turned over — one prompt, as Delete is
+  // — the button turning at once and back if the hub refuses; a post
+  // taken off the Bookmarks page stays there, raised, until the page
+  // loads again.
   const KEPT = "exe-hub-bookmarks";
-  const keptCSS = document.head.appendChild(Object.assign(document.createElement("style"), { id: "kept" }));
   let kept = new Set(), keptFor = null;
   function showKept() {
-    const on = [];
-    for (const b of document.querySelectorAll(".post[id] .bm")) {
-      const id = b.closest(".post").id, k = kept.has(id);
-      b.setAttribute("aria-pressed", k);
-      if (k) on.push('[id="' + id + '"]');
-    }
-    keptCSS.textContent = on.length ? ".post:is(" + on.join(",") + ") .bm .w { fill: currentColor; }" : "";
+    for (const b of document.querySelectorAll(".post[id] .bm")) b.setAttribute("aria-pressed", kept.has(b.closest(".post").id));
   }
+  for (const f of document.querySelectorAll(".frame")) if (f.dataset.live) new MutationObserver(showKept).observe(f, { childList: true });
   const keepKept = () => { try { keptFor ? localStorage.setItem(KEPT, JSON.stringify({ id: keptFor, posts: [...kept] })) : localStorage.removeItem(KEPT); } catch (e) {} };
   function keptOf(id) {
     id = /^[0-9a-f]{16}$/.test(id || "") ? id : "";
@@ -3936,8 +3936,8 @@ document.addEventListener("change", e => {
      its own. Down for everyone until a script says whose posts these are:
      see the .del and .foot.own rules. */}}
 {{/* Bookmark, on a page with the Post window (PLAN.md, The signed-in
-     reader's desk — Bookmarks): the ribbon is hollow, and solid for a
-     post the reader keeps — the rule in <style id="kept"> fills .w */}}
+     reader's desk — Bookmarks): a toggle, pressed in for a post the
+     reader keeps (aria-pressed, which the compose script sets) */}}
 {{define "keep"}}{{if .Keep}}<button type="button" class="btn bm" aria-label="{{T "bookmark"}}" title="{{T "bookmark"}}"><svg viewBox="0 0 8 10" width="8" height="10" aria-hidden="true"><path class="w" d="M1 1h6v1h-6zM1 2h6v1h-6zM1 3h6v1h-6zM1 4h6v1h-6zM1 5h6v1h-6zM1 6h6v1h-6zM1 7h2v1h-2zM5 7h2v1h-2zM1 8h1v1h-1zM6 8h1v1h-1z"/><path class="k" d="M0 0h8v1h-8zM0 1h1v1h-1zM7 1h1v1h-1zM0 2h1v1h-1zM7 2h1v1h-1zM0 3h1v1h-1zM7 3h1v1h-1zM0 4h1v1h-1zM7 4h1v1h-1zM0 5h1v1h-1zM7 5h1v1h-1zM0 6h1v1h-1zM7 6h1v1h-1zM0 7h1v1h-1zM3 7h2v1h-2zM7 7h1v1h-1zM0 8h1v1h-1zM2 8h1v1h-1zM5 8h1v1h-1zM7 8h1v1h-1zM0 9h2v1h-2zM6 9h2v1h-2z"/></svg></button>{{end}}{{end}}
 
 {{/* The Navigation window (PLAN.md, The signed-in reader's desk): a
