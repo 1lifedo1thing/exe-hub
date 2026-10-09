@@ -789,21 +789,23 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
    wears; the word is the danger colour, and the first press arms the
    button red, as the Hub app's does. */
 .foot.own { display: none; }
-/* Bookmark (PLAN.md, The signed-in reader's desk — Bookmarks): on every
-   post's foot line on a page with the Post window, for a signed-in
-   reader; a post with no foot line gets one. Delete's small size, a
-   ribbon glyph hollow when the post is not kept and solid when it is —
-   the rule naming the kept posts on the page stands in a <style
-   id="kept"> the compose script writes. It sits at the right end of the
-   line, Delete (one's own posts) after it. */
-.foot .bm { display: none; align-self: center; margin: 0 0 0 auto; min-width: 0; height: auto; padding: 3px 8px; }
-.wallet .foot .bm { display: inline-flex; align-items: center; justify-content: center; }
-.wallet .foot.own:has(.bm) { display: flex; }
-.foot .bm + .del { margin-left: 0; }
-.foot .bm svg { display: block; width: 8px; height: 10px; shape-rendering: crispEdges; }
-@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) { .foot .bm svg { shape-rendering: geometricPrecision; } }
-.foot .bm .k { fill: currentColor; }
-.foot .bm .w { fill: #fff; }
+/* Bookmark (PLAN.md, The signed-in reader's desk — Bookmarks): at the
+   far right of every post's meta line — the author and the time — on a
+   page with the Post window, for a signed-in reader (Livid, 2026-10-09).
+   Delete's small size, a ribbon glyph hollow when the post is not kept
+   and solid when it is — the rule naming the kept posts on the page
+   stands in a <style id="kept"> the compose script writes. It floats
+   ahead of the meta line, whose clipping box (overflow: hidden) then
+   ends at the button, so a long line still ends in its ellipsis; the
+   negative bottom margin keeps the 18px button within the line's own
+   height (18–19px), centred on it, so nothing under it moves and the
+   line is no taller. */
+.post .bm { display: none; float: right; margin: 0 0 -1px 8px; min-width: 0; height: auto; padding: 3px 8px; }
+.wallet .post .bm { display: flex; align-items: center; justify-content: center; }
+.post .bm svg { display: block; width: 8px; height: 10px; shape-rendering: crispEdges; }
+@media (min-resolution: 1.01dppx) and (max-resolution: 1.99dppx) { .post .bm svg { shape-rendering: geometricPrecision; } }
+.post .bm .k { fill: currentColor; }
+.post .bm .w { fill: #fff; }
 /* why a post is among one's notifications, where "in reply to" stands */
 .meta .why { color: #333399; }
 .foot .del { display: none; margin: 0 0 0 auto; min-width: 0; height: auto;
@@ -3988,14 +3990,14 @@ try { const w = JSON.parse(localStorage.getItem("exe-hub-wallet") || "null"); hu
   {{with .Quote}}<a class="quote" href="/p/{{.ID}}{{$.Q}}"><b>{{.Name}}</b>{{if .Text}} {{.Text}}{{end}}</a>{{end}}
   <a class="av" href="/u/{{.Author}}{{.Q}}">{{if .Avatar}}<img src="/v1/embed/{{.Avatar}}" alt="">{{else}}<img class="idn" src="/v1/identicon/{{.Author}}.svg" alt="">{{end}}</a>
   <div>
-    <div class="meta"><a href="/u/{{.Author}}{{.Q}}"><b>{{if .AuthorName}}{{.AuthorName}}{{else}}{{.Author}}{{end}}</b></a> <span class="mono">{{.Author}}</span> · <a href="/p/{{.ID}}{{.Q}}"><time datetime="{{.Stamp}}">{{.When}}</time></a>{{if .Why}} · <a class="why" href="/p/{{if .ReplyTo}}{{.ReplyTo}}{{else}}{{.ID}}{{end}}{{.Q}}">{{T (print "why." .Why)}}</a>{{else if .ReplyTo}}{{if .InThread}}{{if gt .Depth 1}} · <a href="{{.ParentHref}}">{{T "inreply.name" "name" .ParentName}}</a>{{end}}{{else}}{{if not (or .Quote .QuoteRun)}} · <a href="/p/{{.ReplyTo}}{{.Q}}">{{T "inreply"}}</a>{{end}}{{end}}{{end}}</div>
+    {{template "keep" .}}<div class="meta"><a href="/u/{{.Author}}{{.Q}}"><b>{{if .AuthorName}}{{.AuthorName}}{{else}}{{.Author}}{{end}}</b></a> <span class="mono">{{.Author}}</span> · <a href="/p/{{.ID}}{{.Q}}"><time datetime="{{.Stamp}}">{{.When}}</time></a>{{if .Why}} · <a class="why" href="/p/{{if .ReplyTo}}{{.ReplyTo}}{{else}}{{.ID}}{{end}}{{.Q}}">{{T (print "why." .Why)}}</a>{{else if .ReplyTo}}{{if .InThread}}{{if gt .Depth 1}} · <a href="{{.ParentHref}}">{{T "inreply.name" "name" .ParentName}}</a>{{end}}{{else}}{{if not (or .Quote .QuoteRun)}} · <a href="/p/{{.ReplyTo}}{{.Q}}">{{T "inreply"}}</a>{{end}}{{end}}{{end}}</div>
     {{if .Text}}{{with .Tr}}<div class="text" lang="{{.Lang}}"{{if .Orig}} hidden{{end}}>{{.HTML}}</div>{{end}}<div class="text"{{if .Lang}} lang="{{.Lang}}"{{end}}{{if and .Tr (not .Tr.Orig)}} hidden{{end}}>{{.HTML}}</div>{{with .Tr}}<div class="trl"><span{{if .Orig}} hidden{{end}}>{{.Note}} · </span><a class="tro" role="button" href="/p/{{$.ID}}{{if .Orig}}{{$.Q}}{{else}}?lang=orig{{end}}" data-other="{{if .Orig}}{{.Show}}{{else}}{{.Back}}{{end}}">{{if .Orig}}{{.Back}}{{else}}{{.Show}}{{end}}</a></div>{{end}}{{end}}
     {{if .Card}}<div class="card"><a class="cm" href="{{.Card.URL}}" target="_blank" rel="noopener nofollow">{{if .Card.Image}}<span class="ci"><img src="/v1/embed/{{.Card.Image}}" alt="" loading="lazy"></span>{{end}}<span class="cb"><span class="ct">{{.Card.Title}}</span>{{if .Card.Desc}}<span class="cd">{{.Card.Desc}}</span>{{end}}<span class="ch">{{.Card.Host}}</span></span></a>{{if .Card.Archive}}<a class="arch" href="{{.Card.Archive}}" target="_blank" rel="noopener nofollow">{{T "archived"}}{{with .Card.ArchiveDate}} · {{.}}{{end}}</a>{{end}}</div>{{end}}
     {{with .PostCard}}<div class="card qcard"><a class="cm" href="/p/{{.ID}}{{$.Q}}">{{if .Image}}<span class="ci"><img src="/v1/embed/{{.Image}}" alt="" loading="lazy"></span>{{end}}<span class="cb"><span class="qh"><span class="qav">{{if .Avatar}}<img src="/v1/embed/{{.Avatar}}" alt="">{{else}}<img class="idn" src="/v1/identicon/{{.Author}}.svg" alt="">{{end}}</span><b>{{.Name}}</b><span class="mono">{{.Author}}</span><span class="qw">· <time datetime="{{.Stamp}}">{{.When}}</time></span></span>{{if .Text}}<span class="qt">{{.Text}}</span>{{end}}</span></a></div>{{end}}
     {{if or .Images .Pictures .Videos .Sounds .Files .Pages}}<div class="embeds">{{range .Images}}{{if .Drawing}}<div class="drawing"><a class="pic" href="/v1/embed/{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "picture"}}{{end}}"><img class="draw" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" data-src="/v1/embed/{{.CID}}" data-w="{{.Width}}" data-h="{{.Height}}" style="width:{{.Width}}px;height:{{.Height}}px" alt="{{.Alt}}"><noscript><img class="draw" src="/v1/embed/{{.CID}}" width="{{.Width}}" height="{{.Height}}" loading="lazy" alt=""></noscript></a><button type="button" class="btn again">{{T "replay"}}</button></div>{{else}}<a class="pic" href="/v1/embed/{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "picture"}}{{end}}"><img src="/v1/embed/{{.CID}}" alt="{{.Alt}}"></a>{{end}}{{end}}{{range .Pictures}}<a class="pic" href="/v1/embed/{{.CID}}" data-name="{{.Name}}" title="{{.URL}}"><img src="/v1/embed/{{.CID}}" alt=""></a>{{end}}{{range .Videos}}<div class="vid"{{if .Loop}} data-loop{{end}} style="{{.Box}}"><video src="/v1/embed/{{.CID}}"{{if .Poster}} poster="/v1/embed/{{.Poster}}"{{end}}{{if .Loop}} autoplay loop muted playsinline preload="auto"{{else}} controls playsinline preload="{{if .Poster}}none{{else}}metadata{{end}}"{{end}}{{if .Alt}} aria-label="{{.Alt}}"{{end}}></video></div>{{end}}{{range .Sounds}}<div class="aud">{{if .Poster}}<img class="wave" src="/v1/embed/{{.Poster}}" alt="">{{end}}<audio controls preload="none" src="/v1/embed/{{.CID}}"></audio><span class="afoot">{{if .Filename}}{{.Filename}}{{else}}{{T "sound"}}{{end}}{{with .Length}} · {{.}}{{end}}</span></div>{{end}}{{range .Pages}}<div><a class="page" href="/v1/embed/{{.CID}}" data-cid="{{.CID}}" data-name="{{if .Filename}}{{.Filename}}{{else}}{{T "page"}}{{end}}">{{if .Filename}}{{.Filename}}{{else}}{{T "page"}}{{end}}</a><a class="pagedl" href="/v1/embed/{{.CID}}" download>{{T "download"}}</a></div>{{end}}{{range .Files}}<a class="file" href="/v1/embed/{{.CID}}">{{if .Filename}}{{.Filename}}{{else}}{{.CID}}{{end}} ({{.MIME}})</a>{{end}}</div>{{end}}
-    {{if .InThread}}<div class="foot re"><a class="rlink" role="button" href="/p/{{.ID}}{{.Q}}">{{T "reply"}}</a>{{template "keep" .}}{{template "del" .}}</div>
-    {{else if and (not .ReplyTo) .Replies}}<div class="foot"><a class="count" href="/p/{{.ID}}{{.Q}}">{{T "replies" "n" .Replies}} ▸</a>{{with .Latest}}<a class="latest" href="{{.Href}}"><b>{{.Name}}</b> {{.Text}}</a>{{end}}{{template "keep" .}}{{template "del" .}}</div>
-    {{else}}<div class="foot own">{{template "keep" .}}{{template "del" .}}</div>{{end}}
+    {{if .InThread}}<div class="foot re"><a class="rlink" role="button" href="/p/{{.ID}}{{.Q}}">{{T "reply"}}</a>{{template "del" .}}</div>
+    {{else if and (not .ReplyTo) .Replies}}<div class="foot"><a class="count" href="/p/{{.ID}}{{.Q}}">{{T "replies" "n" .Replies}} ▸</a>{{with .Latest}}<a class="latest" href="{{.Href}}"><b>{{.Name}}</b> {{.Text}}</a>{{end}}{{template "del" .}}</div>
+    {{else}}<div class="foot own">{{template "del" .}}</div>{{end}}
   </div>
 </div>
 {{end}}

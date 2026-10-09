@@ -1795,14 +1795,17 @@ bookmark op for post), Profile".
   op and never replicates, so a peer neither pulls nor serves them.
   Gated as `profile.set` is, without the cooldown: a key that could not
   post here cannot fill the log with bookmarks either.
-- **The Bookmark button** stands on every post's foot line on a page
-  with the Post window (the home page, a thread, Notifications,
-  Bookmarks), for a signed-in reader only: a small push button, Delete's
-  size, holding a ribbon glyph, hollow when the post is not kept and
-  solid black when it is, its title saying which ("Bookmark", "Remove
-  bookmark"). It sits at the right end of the line, Delete (one's own
-  posts) after it. A post with no foot line (no replies, not one's
-  own) gets one under `<html class="wallet">` — the class the head
+- **The Bookmark button** stands at the far right of every post's meta
+  line — the author, the id and the time — on a page with the Post
+  window (the home page, a thread, Notifications, Bookmarks), for a
+  signed-in reader only (Livid, 2026-10-09; it first stood on the foot
+  line, which gave every post nobody answered a line of its own): a
+  small push button, Delete's size, holding a ribbon glyph, hollow when
+  the post is not kept and solid black when it is, its title saying
+  which ("Bookmark", "Remove bookmark"). It floats ahead of the meta
+  line, whose clipping box then ends at the button, so a long line still
+  ends in its ellipsis, and it keeps within the line's height, so the
+  line is no taller. Shown by `<html class="wallet">`, which the head
   script sets before layout, so a returning reader's feed does not
   move. A press signs one `post.bookmark` with the state it shows
   turned over — one wallet prompt, as Delete is — the button turning at

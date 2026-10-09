@@ -51,6 +51,11 @@ func TestWebDesk(t *testing.T) {
 	if strings.Count(home, `class="btn bm"`) != 2 {
 		t.Errorf("home: %d Bookmark buttons, want one on each of its two posts", strings.Count(home, `class="btn bm"`))
 	}
+	// at the far right of the meta line: floated ahead of it, never on the foot
+	if !strings.Contains(home, `</svg></button><div class="meta"><a href="/u/`) || strings.Contains(home, `.wallet .foot.own:has(.bm)`) ||
+		!strings.Contains(home, `.post .bm { display: none; float: right;`) {
+		t.Error("home: the Bookmark button does not stand at the head of the meta line")
+	}
 
 	// a thread: the window in the side, no row its own
 	_, thread := get(t, h, "/p/"+root)
