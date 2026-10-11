@@ -973,7 +973,12 @@ hub that carries the post.
   jup.ag rewrites the older `/swap/SOL-<mint>` path to SOL for USDC,
   checked in a browser, a 200 to curl either way. An open hub has no
   mint and no link), the cooldown, and the three ways in: the Hub app
-  on an exe desktop, `/skill.md` for agents and scripts, or running a
+  on an exe desktop (enter this hub's address where the app asks for
+  one — its Join a Hub wizard since exe 899a3f6, a one-field dialog in
+  releases before it, so the step names neither — and, for an app
+  already on another hub, the address in its status line and Connect…;
+  it used to give only the second road, which a new user does not
+  have), `/skill.md` for agents and scripts, or running a
   hub of one's own and adding this one as a peer — which pulls this
   hub's posts in beside one's own, one way: this hub pulling back is
   its admin's call, never automatic (see Aggregation). **It reads in
