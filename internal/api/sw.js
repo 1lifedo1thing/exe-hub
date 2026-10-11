@@ -15,7 +15,8 @@
 // its pictures. Posting, the event stream, the JSON API, video and sound
 // go to the network as if there were no worker.
 //
-// And it shows the hub's pushes, opening the page on a click.
+// And it shows the hub's pushes, opening the page on a click — and keeps
+// the page a push tells of, and the feed, as it shows it.
 //
 // The hub stamps VERSION from the pages' bytes (the template, their
 // words, this file), so a deploy that changes any of them is a byte-
@@ -266,9 +267,37 @@ function trim(name, max) {
 self.addEventListener("push", e => {
   let m = {};
   try { m = e.data ? e.data.json() : {}; } catch (err) {}
-  e.waitUntil(self.registration.showNotification(m.title || "New post", {
-    body: m.body || "", icon: "/icon-192.png", tag: m.tag, data: { url: m.url || "/" } }));
+  e.waitUntil(Promise.all([
+    self.registration.showNotification(m.title || "New post", {
+      body: m.body || "", icon: "/icon-192.png", tag: m.tag, data: { url: m.url || "/" } }),
+    fresh(m.url).catch(() => {}),
+  ]));
 });
+
+// A push is the one moment the worker runs with the hub closed, on a
+// phone too (no browser there wakes a worker by the clock). So it
+// brings in what it tells of: the page its notification opens and the
+// feed, as they are now, kept with their pictures — the notification
+// opens on its post in a tunnel, and the hub opened later with no
+// network has the feed as of its last push. A page in view is left
+// alone, it keeps itself; nothing is fetched for a reader who asked the
+// browser to save data; and twenty seconds is the most a push holds the
+// worker up for it. No page view (save).
+async function fresh(to) {
+  if (self.navigator.connection && self.navigator.connection.saveData) return;
+  const inView = new Set();
+  for (const c of await self.clients.matchAll({ type: "window" })) if (c.visibilityState === "visible") inView.add(key(new URL(c.url)));
+  const pages = await caches.open(PAGES), want = new Map();
+  for (const p of [to || "/", "/"]) {
+    const url = new URL(p, self.location.origin);
+    if (url.origin === self.location.origin && PAGE.test(url.pathname) && !inView.has(key(url))) want.set(key(url), url);
+  }
+  const work = (async () => {
+    for (const url of want.values()) await save(pages, url).catch(() => {});
+    await trim(PAGES, KEEP_PAGES);
+  })();
+  await Promise.race([work, new Promise(done => setTimeout(done, 20000))]);
+}
 self.addEventListener("notificationclick", e => {
   e.notification.close();
   const url = new URL((e.notification.data && e.notification.data.url) || "/", self.location.origin).href;

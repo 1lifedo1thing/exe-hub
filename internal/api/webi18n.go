@@ -134,13 +134,14 @@ func isOne(v any) bool {
 }
 
 // webTmpls is the page template, parsed once for each language with T
-// bound to it; the stats desk's blocks come from the package that draws
-// it (its own words are still English), parsed into each set so the
-// desk renders inside the hub's chrome.
+// bound to it and build naming the build that serves it (offline.go);
+// the stats desk's blocks come from the package that draws it (its own
+// words are still English), parsed into each set so the desk renders
+// inside the hub's chrome.
 var webTmpls = func() map[string]*template.Template {
 	out := map[string]*template.Template{}
 	for code, l := range webLocales {
-		t := template.New("web").Funcs(stats.Funcs()).Funcs(template.FuncMap{"T": l.T})
+		t := template.New("web").Funcs(stats.Funcs()).Funcs(template.FuncMap{"T": l.T, "build": func() string { return webBuild }})
 		out[code] = template.Must(template.Must(t.Parse(webHTML)).Parse(stats.TemplateHTML()))
 	}
 	return out

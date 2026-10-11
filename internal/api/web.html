@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="exe-hub-build" content="{{build}}">
 <title>{{.Title}}</title>
 <link rel="icon" href="/favicon.ico" sizes="32x32 16x16">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -1260,10 +1261,58 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
   };
   let served = sent(feed), land = "";
   let sideServed = (document.querySelector(".window.summary") || {}).outerHTML || "";
+  // A page left open (PLAN.md, Offline: a page left open follows the
+  // build). The swap brings the hub's posts into this page's script and
+  // styles, and a deploy may have changed those under it. Every page
+  // says which build served it (its exe-hub-build meta), the fetched one
+  // too: when that names another build, this page is an old one. The
+  // worker is asked to update then, since a page that never navigates
+  // never has its worker checked, and the page loads itself anew once
+  // that costs the reader nothing: in view, nothing pressed, typed or
+  // scrolled for five seconds, and nothing held — the cursor in a field,
+  // words not sent, pictures chosen, a dialog or a picture's window open,
+  // something being signed or sent, a film or a sound playing, a
+  // selection. Until then the swap goes on as ever. One try a build,
+  // remembered for the tab: a page that loaded anew and is still not
+  // that build leaves it there, and one that cannot remember does not
+  // try. Out of view it waits, and goes when shown.
+  const buildOf = d => (d.querySelector('meta[name="exe-hub-build"]') || {}).content || "";
+  const build = buildOf(document), TRIED = "exe-hub-build";
+  let stale = "", acted = 0, due;
+  for (const t of ["pointerdown", "keydown", "wheel", "touchmove", "scroll"]) addEventListener(t, () => { acted = Date.now(); }, { capture: true, passive: true });
+  const held = () => {
+    const sel = getSelection(), at = document.activeElement;
+    return !!((window.hubBusy && hubBusy())
+      || (at && at.matches("textarea, input[type=text]"))
+      || [...document.querySelectorAll("textarea, input[type=text]:not([hidden])")].some(f => f.value !== f.defaultValue)
+      || document.querySelector(".atts > *, .veil:not([hidden]), .dveil:not([hidden]), .picker:not([hidden]), .viewer, .ytv iframe")
+      || [...document.querySelectorAll("video:not([loop]), audio")].some(m => !m.paused && !m.ended)
+      || (sel && !sel.isCollapsed));
+  };
+  // true once the page is on its way out
+  const renew = () => {
+    clearTimeout(due);
+    if (!stale || document.hidden) return false; // shown again, it asks again (below)
+    if (held() || Date.now() - acted < 5000) { due = setTimeout(renew, 1000); return false; }
+    try { sessionStorage.setItem(TRIED, stale); } catch (e) { stale = ""; return false; }
+    location.reload();
+    return true;
+  };
+  const newer = b => {
+    if (!build || !b) return false;
+    if (b === build) { stale = ""; return false; } // the hub is on this page's build (again)
+    if (b !== stale) {
+      try { if (sessionStorage.getItem(TRIED) === b) return false; } catch (e) { return false; }
+      stale = b;
+      if ("serviceWorker" in navigator) navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => {});
+    }
+    return renew();
+  };
   const swap = html => {
     const doc = new DOMParser().parseFromString(html, "text/html");
     const fresh = doc.querySelector(".frame[data-live]");
     if (!fresh) return;
+    if (newer(buildOf(doc))) return;
     // the Summary window beside a thread (PLAN.md, Thread summaries) is
     // brought in, replaced or taken away whole, as served: a reader who
     // turned it to the original keeps it turned while the served HTML
@@ -1384,9 +1433,10 @@ code { font: 11px Monaco, "Courier New", monospace; background: #eee; padding: 0
   const reopen = () => { down = true; connect(); };
   const wake = () => { if (es.readyState === EventSource.CLOSED || silent()) reopen(); };
   setInterval(() => { if (silent()) reopen(); }, 15000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) { wake(); if (wanted) poke(); } });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { wake(); if (wanted) poke(); renew(); } });
   addEventListener("online", wake);
-  addEventListener("pageshow", e => { if (e.persisted) wake(); });
+  // back from the back-forward cache: frozen since it was left, whatever its stream looks like
+  addEventListener("pageshow", e => { if (e.persisted) { wake(); poke(); } });
   connect();
 })();
 </script>
@@ -2305,6 +2355,10 @@ document.addEventListener("change", e => {
 
   // ---- state ----
   let me = null, verdict = null, until = 0, busy = false, flash = "", timer = 0;
+  // a wallet's prompt up, or something being signed and sent: a live page
+  // that found itself an old build waits these out (the live script)
+  let asking = false;
+  window.hubBusy = () => busy || asking;
   let target = null; // on a thread page: the reply this window answers instead of the page's post
   const ATT_MAX = 4; // the hub's embeds to a post
   let atts = []; // the pictures attached: {name, mime, size, body, url, cid, at} (Draft uploads, below)
@@ -2480,6 +2534,7 @@ document.addEventListener("change", e => {
   const wasOut = () => { try { return !!localStorage.getItem(OUT); } catch (e) { return false; } };
   async function start(w) {
     let got;
+    asking = true;
     try {
       got = wasOut() ? await confirm(w) : await connect(w, false);
     } catch (e) {
@@ -2487,7 +2542,7 @@ document.addEventListener("change", e => {
       signedOut();
       note.textContent = declined(e) ? T("declined") : T("noconnect", { err: e.message || e });
       return;
-    }
+    } finally { asking = false; }
     try { localStorage.removeItem(OUT); } catch (e) {}
     await signedIn(got);
   }

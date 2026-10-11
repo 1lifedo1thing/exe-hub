@@ -26,7 +26,7 @@ func TestWebOffline(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("GET", "http://hub.example/sw.js", nil))
 	sw := w.Body.String()
-	if w.Code != 200 || w.Header().Get("Content-Type") != "text/javascript; charset=utf-8" || w.Header().Get("Cache-Control") != "no-cache" {
+	if w.Code != 200 || w.Header().Get("Content-Type") != "text/javascript; charset=utf-8" || w.Header().Get("Cache-Control") != "no-store" {
 		t.Errorf("sw.js: %d %q %q", w.Code, w.Header().Get("Content-Type"), w.Header().Get("Cache-Control"))
 	}
 	if !regexp.MustCompile(`const VERSION = "[0-9a-f]{16}";`).MatchString(sw) || strings.Contains(sw, "__HUB_BUILD__") {
@@ -77,5 +77,52 @@ func TestWebOffline(t *testing.T) {
 	}
 	if _, body := get(t, h, "/"); strings.Contains(body, `location.pathname === "/offline"`) {
 		t.Error("the feed carries the offline page's script")
+	}
+}
+
+// TestWebBuild (PLAN.md, Offline: a page left open follows the build):
+// every page says which build served it, the one the worker carries as
+// its VERSION; the live pages — the feed, a thread, the replies frame —
+// compare it with the build of what they fetch, and a page that is not
+// live has nothing to compare; the worker keeps what a push tells of.
+func TestWebBuild(t *testing.T) {
+	s := testServer(t, &config.Config{Gate: config.Gate{Mode: "open"}})
+	s.Events = events.New()
+	h := s.Handler()
+	if !regexp.MustCompile(`^[0-9a-f]{16}$`).MatchString(webBuild) {
+		t.Fatalf("webBuild = %q", webBuild)
+	}
+	_, sw := get(t, h, "/sw.js")
+	if !strings.Contains(sw, `const VERSION = "`+webBuild+`";`) {
+		t.Error("the worker's VERSION is not the pages' build")
+	}
+	for _, want := range []string{`fresh(m.url)`, `async function fresh(to)`, `saveData`} {
+		if !strings.Contains(sw, want) {
+			t.Errorf("sw.js lacks %s: a push no longer keeps its page", want)
+		}
+	}
+
+	pub, priv, _ := ed25519.GenerateKey(nil)
+	root := ingest(t, s, priv, pub, 1, "post.create", map[string]any{"text": "a post"})
+	stamp := `<meta name="exe-hub-build" content="` + webBuild + `">`
+	const check = `newer(buildOf(doc))`
+	for path, live := range map[string]bool{
+		"/": true, "/p/" + root: true, "/p/" + root + "/replies": true,
+		"/?before=" + root: false, "/u/" + identity.Fingerprint(pub): false, "/search?q=post": false, "/offline": false, "/badge/": false,
+	} {
+		code, body := get(t, h, path)
+		if code != 200 {
+			t.Fatalf("%s: %d", path, code)
+		}
+		if !strings.Contains(body, stamp) {
+			t.Errorf("%s does not say which build served it", path)
+		}
+		if strings.Contains(body, check) != live {
+			t.Errorf("%s: compares builds = %v, want %v", path, !live, live)
+		}
+	}
+	// what holds a reload back is the composer's to say
+	if _, body := get(t, h, "/"); !strings.Contains(body, `window.hubBusy = () => busy || asking;`) {
+		t.Error("the composer does not say when it is busy")
 	}
 }

@@ -1728,8 +1728,9 @@ vector) and 8292 (VAPID).
 - **The service worker** `/sw.js` shows the notification (the hub's
   icon) and opens or focuses the page on a click. Since 2026-10-07 it
   also keeps the pages for offline (see Offline), and every page
-  registers it. Served `no-cache` and stamped, so a change reaches a
-  browser on its next check.
+  registers it; since 2026-10-11 a push also keeps the page it tells
+  of, and the feed. Served `no-store` and stamped, so a change reaches
+  a browser on its next check.
 - **The control** is a bell at the right of the find strip, in a 20px
   bevel button: the HIG's bevel button as a toggle — raised when off,
   depressed (the pressed push button's dark face) when on, with the
@@ -1994,27 +1995,97 @@ and whatever was never seen need the hub.
   `X-Hub-Live: 1`, the pages' own refetch marker, so no page view. A
   live page's refetches pass through it and refresh the kept copy, so
   the kept feed is the one last seen.
-- **The worker is stamped**: `VERSION` is a hash of the template, the
-  words in every language and the worker itself (`swJS`), so a deploy
-  that changes any of them is a byte-different worker, which installs
-  and keeps the offline page anew. The pages and files are kept in
-  caches that outlast a version (`hub-pages`, `hub-files`; the offline
-  page in `hub-shell-<version>`); anything else the origin holds goes.
-  Served `no-cache`; a browser never takes the worker from its HTTP
-  cache, and Cloudflare passes every ask on to the hub (EXPIRED each
-  time, measured).
+- **One build, said by every page and carried by the worker**: `webBuild`
+  (`offline.go`) is a hash of what the pages are made of — the
+  template, the words in every language, the chrome and the stats
+  desk's blocks taken from exe-stats, and the worker itself. Every page
+  says it in its head (`<meta name="exe-hub-build">`), and the worker
+  is stamped with it as its `VERSION` (`swJS`), so a deploy that changes
+  any of them is a byte-different worker, which installs and keeps the
+  offline page anew. The pages and files are kept in caches that
+  outlast a version (`hub-pages`, `hub-files`; the offline page in
+  `hub-shell-<version>`); anything else the origin holds goes. A change
+  to Go alone (how a post's text is set, say) is the same build: the
+  pages' HTML carries it.
+- **A page left open follows the build** (Livid, 2026-10-11: "how do we
+  ensure client can update to the latest assets?", then "do it"). A
+  navigation always brought the hub's page as it is, and with it the
+  browser's check of the worker. A page that stays open never
+  navigates — the installed app above all, resumed rather than opened,
+  on an iPhone with nothing to reload it by — and its live swap went on
+  bringing the hub's new posts into the old page's script and styles.
+  Now a live page (the feed's first page, a thread, the replies frame)
+  reads the build of every page it fetches, and one that is not its
+  own means this page is old. It asks the browser to check the worker
+  (`registration.update()`: no navigation, no check) and loads itself
+  anew when that costs the reader nothing: in view, nothing pressed,
+  typed or scrolled for five seconds, and nothing held — the cursor in
+  a field, words not sent, pictures chosen, a dialog or a picture's or
+  a page's window open, a wallet's prompt up or something being signed
+  and sent (`hubBusy`, the composer's to say), a film or a sound
+  playing or a YouTube player started, a selection. Until then the
+  swap goes on as it always did. The browser puts the reader back
+  where they were (measured: the same post at the same pixel). Out of
+  view the page waits — it would be a page view nobody made — and goes
+  the moment it is shown (460 ms). An idle page in view went 5.4 s
+  after the hub was back. One try a build, remembered for the tab
+  (`sessionStorage`): a page that loads anew and is still not that
+  build, some cache in the way, leaves it there instead of loading for
+  ever, and one that cannot remember (a frame denied its storage) does
+  not try. A hub put back on the page's own build is nothing to load
+  for. The load is a navigation and is counted as the page view it is.
+  A page that is not live (a profile, a search, the feed past its
+  first page) asks the hub nothing while it stands, and is old script
+  on its own old markup, whole, until the reader goes anywhere. A page
+  back from the back-forward cache asks the hub again whatever its
+  stream looks like, since it was frozen while away. Pages open since
+  before 2026-10-11 have no check in them and need one reload by hand.
+- **A push brings its page** (the same day; Livid: "when installed as
+  pwa, can we do background refresh?"). Not by the clock. Periodic
+  Background Sync is Chromium's alone, only for an installed app, at a
+  cadence the browser picks from how much the app is used (twice a day
+  at best), and no iPhone has it or anything like it: turned down, a
+  second road for the few it reaches. What wakes a worker everywhere
+  the hub installs, the iPhone's Home Screen too, is the push the hub
+  already sends. So the worker, as it shows a push, fetches and keeps
+  the page its notification opens and the feed, with their pictures
+  (`fresh` in `sw.js`): the notification opens on its post in a tunnel,
+  and the hub opened later with no network has the feed as of its last
+  push. A page in view is left alone, it keeps itself; nothing is
+  fetched for a reader who asked the browser to save data; twenty
+  seconds is the most a push holds the worker up; the fetches carry
+  `X-Hub-Live`, so no page view. It reaches only a reader who turned
+  Notify on, as often as something concerns them (Notifications): a
+  browser lets no push pass without its notification, so there is no
+  silent one to refresh by.
+- **The worker is kept by nothing on the way.** Served `no-store`. It
+  was `no-cache`, which is the same to a browser — none takes the
+  worker from its HTTP cache — but not to Cloudflare, which keeps a
+  `.js` that says `no-cache`, asks the hub again every time (EXPIRED)
+  and hands the browser `max-age=14400` in the header's place
+  (measured 2026-10-11). Harmless as browsers are, and wrong on its
+  face; `no-store` is passed on as it is (BYPASS, measured after the
+  deploy), so no Cache Rule was added for it: the header travels with
+  the hub to whatever zone it is published in.
 - **Only in a secure context**, as every service worker: hub.v2core.com
   is one; the host hub on its plain-http Tailscale address is not, and
   is the hub as it always was.
-- Check: `go test ./internal/api` (TestWebOffline) and
+- Check: `go test ./internal/api` (TestWebOffline, TestWebBuild) and
   `~/tools/playwright/exe-hub-offline-test.js` against a scratch hub
   behind the test's own proxy, which it cuts (connections refused),
   stalls (a page held seven seconds; every request held, never
   answered) and makes answer 502 — Playwright's offline switch and
-  routes do not reliably reach a worker's own fetches.
-- **Not built:** reading ahead (a thread is kept once opened, not
-  because the feed shows it); posting offline is refused, not queued;
-  a kept copy's counts and "online" are those of when it was kept.
+  routes do not reliably reach a worker's own fetches. The build and
+  the push: `~/tools/playwright/exe-hub-build-test.js`, which runs two
+  binaries of one tree a template byte apart (`go build -overlay`) in
+  turn on one scratch state and swaps them under open pages, and hands
+  the worker its pushes over the DevTools protocol
+  (`ServiceWorker.deliverPushMessage`; full Chromium, the headless
+  shell shows no notification).
+- **Not built:** reading ahead (a thread is kept once opened or
+  pushed, not because the feed shows it); posting offline is refused,
+  not queued; a kept copy's counts and "online" are those of when it
+  was kept; a refresh by the clock (above).
 
 ## Link cards — the first link, unfurled (built)
 

@@ -209,7 +209,10 @@ worker keeps every page a reader opens, with its pictures, and shows
 the kept copy, marked Offline, when the hub cannot be reached (no
 network, a 502 from the edge, no answer in three seconds); a page never
 opened says so and loads itself once the hub answers. Online, every
-page still comes from the hub. Posting needs the network.
+page still comes from the hub. Posting needs the network. A push also
+keeps the page it tells of, so its notification opens with no signal;
+and a page left open through a deploy loads itself anew once that
+interrupts nothing, so an installed copy is never a build behind.
 
 `/stats` is the hub's own analytics — visitors, page views, sessions,
 bounce rate and session time against the span before, a chart, who is
