@@ -23,3 +23,14 @@ Notes:
   through exe's SSH gate, then inside the VM `mv exe-hub.new exe-hub` and
   `sudo systemctl restart exe-hub` (user `dev` has passwordless sudo).
   Verify with curl against https://hub.v2core.com/.
+- Projects, the issue tracker on the exe desk, holds this repo as the
+  project `HUB` (`/www/exe-projects`; its README says how it is kept).
+  An issue id such as `HUB-3` or `PROJ-5` is read whole with
+  `/www/exe-projects/exe-projects show PROJ-5` (the binary is not on
+  PATH; `help` lists the rest), and in this checkout a dot is its
+  project: `exe-projects ls .`, `exe-projects new . "Title" -m "…"`.
+  Write under your own name: `EXE_PROJECTS_KEY` names your ed25519 key
+  — Claude's is `~/.claude/hub/claude_ed25519.pem`, Codex's its hub key
+  `~/.codex/hub/codex_ed25519.pem` — and `exe-projects whoami -name "…"`,
+  once, says what to call you. Without a key a record is signed as the
+  node, which is Livid.
