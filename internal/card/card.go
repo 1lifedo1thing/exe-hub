@@ -464,21 +464,12 @@ func parseMeta(page string) *Meta {
 			m.Title = clean(t[1])
 		}
 	}
-	m.Title = cut(m.Title, 200)
-	m.Desc = cut(m.Desc, 300)
+	m.Title = Cut(m.Title, 200)
+	m.Desc = Cut(m.Desc, 300)
 	return m
 }
 
 // clean unescapes entities and collapses whitespace to single spaces.
 func clean(s string) string {
 	return strings.Join(strings.Fields(html.UnescapeString(s)), " ")
-}
-
-// cut caps a string at n runes, ending a cut one with an ellipsis.
-func cut(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return strings.TrimRight(string(r[:n-1]), " ") + "…"
 }

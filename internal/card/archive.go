@@ -176,7 +176,7 @@ func (w *Wayback) Saved(ctx context.Context, job, link string) (string, error) {
 		}
 		return WaybackWeb + st.Timestamp + "/" + archiveLink(link), nil
 	}
-	return "", fmt.Errorf("%w: %s %s %s", errSaveFailed, st.Status, st.StatusExt, cut(st.Message, 200))
+	return "", fmt.Errorf("%w: %s %s %s", errSaveFailed, st.Status, st.StatusExt, Cut(st.Message, 200))
 }
 
 // ArchiveStore is what the archiver keeps in the hub's store.

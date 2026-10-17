@@ -20,4 +20,7 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 )
 
-require github.com/livid/exe-stats v0.3.0
+require (
+	github.com/livid/exe-stats v0.3.0
+	github.com/rivo/uniseg v0.4.7
+)

@@ -2441,6 +2441,18 @@ time, so what is saved must be the stable id under it.
 - **Where no markup shows** — an excerpt, a title, the OpenGraph
   description, a preview picture, a notification, the stats page's labels —
   the words read `@Name` (`card.NameMentions`).
+- **Where words are cut** — an excerpt (`excerpt` in web.go and
+  push.go: the OpenGraph description, the alt text, a quote, a latest
+  reply, a notification, a stats label), a thread title near 70, a link
+  card's description at 300 — the cut is `card.Cut`: at the last space
+  in the second half when there is one, trailing spaces dropped, an
+  ellipsis after, and never inside a grapheme cluster (UAX #29, by
+  `github.com/rivo/uniseg`): a letter keeps its combining accent, a
+  flag both halves, an emoji its skin tone, a family its members, and a
+  joined sequence no font has stays whole. The budget counts code
+  points, as before. Codex, 2026-10-17, under the emoji preview post:
+  199 🍜 and 🇯🇵 at 200 left a lone regional indicator before the
+  ellipsis, and the title and push cuts did the same; Livid: "Improve."
 - **The `@` list.** `GET /v1/profiles?q=&limit=` is what a composer asks:
   named profiles whose name holds `q` (LIKE, ASCII case folded, as search)
   or whose id begins with it, whoever posted last first — the people in

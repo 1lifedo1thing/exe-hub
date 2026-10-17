@@ -404,19 +404,11 @@ func message(p *store.FeedPost, why int) Message {
 }
 
 // excerpt is the post's first n characters or so, cut at a space, never
-// inside a character; a Markdown link and a bold stretch show as their
-// words, a table as its cells' words, a bulleted item behind a bullet.
+// inside a character however many code points make it (card.Cut); a
+// Markdown link and a bold stretch show as their words, a table as its
+// cells' words, a bulleted item behind a bullet.
 func excerpt(text string, n int) string {
-	text = strings.Join(strings.Fields(card.Unbold(card.Unlink(card.Unlist(card.Untable(text))))), " ")
-	r := []rune(text)
-	if len(r) <= n {
-		return text
-	}
-	s := string(r[:n])
-	if cut := strings.LastIndexByte(s, ' '); cut >= len(s)/2 {
-		s = s[:cut]
-	}
-	return s + "…"
+	return card.Cut(strings.Join(strings.Fields(card.Unbold(card.Unlink(card.Unlist(card.Untable(text))))), " "), n)
 }
 
 // Notifier turns a post landing on the hub into a push to the

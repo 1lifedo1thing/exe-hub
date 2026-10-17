@@ -1540,30 +1540,10 @@ func webWords(text string) string {
 
 // excerpt is a post's first n characters or so, for the OpenGraph
 // description a chat app shows when a link is pasted: cut at a word
-// boundary when there is one in the second half, never mid-character.
+// boundary when there is one in the second half, never inside a
+// character however many code points make it (card.Cut).
 func excerpt(text string, n int) string {
-	text = strings.Join(strings.Fields(webWords(text)), " ")
-	rs := []rune(text)
-	if len(rs) <= n {
-		return text
-	}
-	return string(trimWords(rs, n)) + "…"
-}
-
-// trimWords cuts rs to n runes at the last space in the second half,
-// else at n, and drops the trailing spaces.
-func trimWords(rs []rune, n int) []rune {
-	cut := n
-	for i := n; i > n/2; i-- {
-		if rs[i-1] == ' ' {
-			cut = i - 1
-			break
-		}
-	}
-	for cut > 0 && rs[cut-1] == ' ' {
-		cut--
-	}
-	return rs[:cut]
+	return card.Cut(strings.Join(strings.Fields(webWords(text)), " "), n)
 }
 
 // titleMax is about how long a page title runs before it is cut: what
@@ -1600,7 +1580,7 @@ func opening(text string) string {
 		}
 	}
 	if len(rs) > titleMax {
-		return string(trimWords(rs, titleMax)) + "…"
+		return card.Cut(string(rs), titleMax)
 	}
 	return strings.TrimRight(string(rs), ".。")
 }
