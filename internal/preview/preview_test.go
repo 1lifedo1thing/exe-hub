@@ -43,8 +43,118 @@ func TestWrap(t *testing.T) {
 	}
 }
 
+// TestClusters: an emoji's whole sequence — a ZWJ family, a flag, a
+// keycap, a skin tone, a variation selector — is one cluster; a
+// sequence the font has no picture for falls apart into those it has.
+func TestClusters(t *testing.T) {
+	if err := load(); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		in   string
+		want []string
+	}{
+		{"a😀b", []string{"a", "😀", "b"}},
+		{"👨‍👩‍👧!", []string{"👨‍👩‍👧", "!"}},
+		{"🇯🇵🇺🇸", []string{"🇯🇵", "🇺🇸"}},
+		{"1️⃣2", []string{"1️⃣", "2"}},
+		{"🏳️‍🌈", []string{"🏳️‍🌈"}},
+		{"👍🏽👍", []string{"👍🏽", "👍"}},
+		{"❤️x", []string{"❤️", "x"}},
+		{"🦊‍🍜", []string{"🦊", "‍", "🍜"}},
+		{"©️ ©", []string{"©️", " ", "©"}},
+	} {
+		if got := clusters(c.in); strings.Join(got, "|") != strings.Join(c.want, "|") {
+			t.Errorf("clusters(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestEmojiOrType: a character that is type by default stays type
+// unless U+FE0F asks for the picture; an emoji by default is the
+// picture; a sequence always is.
+func TestEmojiOrType(t *testing.T) {
+	if err := load(); err != nil {
+		t.Fatal(err)
+	}
+	f := face(regular, 36)
+	for c, want := range map[string]bool{
+		"©": false, "©️": true, "#": false, "#️⃣": true, "7": false,
+		"😀": true, "✅": true, "🇯🇵": true, "👨‍👩‍👧": true, "a": false, "今": false,
+	} {
+		if got := f.emoji(c) != nil; got != want {
+			t.Errorf("emoji(%q) = %v, want %v", c, got, want)
+		}
+	}
+	if got, want := f.width("😀😀"), 2*(fixed.I(36*emojiWidth)/emojiPPEM); got != want {
+		t.Errorf("two emoji %v wide, want %v", got, want)
+	}
+}
+
+// TestEmojiWrap: lines break between emoji, never inside a sequence,
+// and the ellipsis cuts a whole one.
+func TestEmojiWrap(t *testing.T) {
+	if err := load(); err != nil {
+		t.Fatal(err)
+	}
+	f := face(regular, 36)
+	fam := "👨‍👩‍👧"
+	lines := f.wrap(strings.Repeat(fam, 30), fixed.I(300), 3)
+	if len(lines) != 3 {
+		t.Fatalf("lines: %q", lines)
+	}
+	for i, l := range lines {
+		body := strings.TrimSuffix(l, "…")
+		if body == "" || strings.ReplaceAll(body, fam, "") != "" || f.width(l) > fixed.I(300) {
+			t.Errorf("line %d: %q", i, l)
+		}
+	}
+	if !strings.HasSuffix(lines[2], "…") {
+		t.Errorf("no ellipsis: %q", lines[2])
+	}
+}
+
+// TestEmojiDrawn: an emoji is drawn in its colours inside the box the
+// font gives it — 101/109 of the size above the baseline, 27/109 below,
+// 136/109 wide — and © stays ink.
+func TestEmojiDrawn(t *testing.T) {
+	if err := load(); err != nil {
+		t.Fatal(err)
+	}
+	f := face(regular, 36)
+	img := image.NewRGBA(image.Rect(0, 0, 200, 100))
+	fill(img, img.Bounds(), white)
+	f.draw(img, 10, 60, "😀©", ink)
+	box := image.Rect(10, 60-36*101/109-1, 10+36*136/109+1, 60+36*27/109+1)
+	yellow, inked := 0, 0
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 200; x++ {
+			c := img.RGBAAt(x, y)
+			if c == white {
+				continue
+			}
+			if !(image.Point{x, y}).In(box) {
+				if c.R == c.G && c.G == c.B {
+					inked++ // the ©, in grey
+					continue
+				}
+				t.Fatalf("colour %v outside the emoji's box at %d,%d", c, x, y)
+			}
+			if c.R > 0xd0 && c.G > 0xa0 && c.B < 0x60 {
+				yellow++
+			}
+		}
+	}
+	if yellow < 300 {
+		t.Errorf("only %d yellow pixels: the face is not drawn", yellow)
+	}
+	if inked == 0 {
+		t.Error("the © is not drawn")
+	}
+}
+
 // TestPNG: the card is a 1200×630 PNG whatever it says, an emoji
-// (which no face has) included.
+// included.
 func TestPNG(t *testing.T) {
 	b, err := Card{Title: "hub.example", Name: "Livid", Sub: "16 Sep 2026", Body: "exe 功能一览 🚀 done", Foot: "1 reply"}.PNG()
 	if err != nil {
@@ -58,8 +168,8 @@ func TestPNG(t *testing.T) {
 
 // TestChromeOut writes the pictures a browser check diffs against
 // chrome.css rendered at 2x when PREVIEW_OUT names a directory:
-// chrome.png, a card with nothing on it but the chrome, and card.png,
-// the sample card, to look at.
+// chrome.png, a card with nothing on it but the chrome, and card.png
+// and emoji.png, sample cards, to look at.
 func TestChromeOut(t *testing.T) {
 	dir := os.Getenv("PREVIEW_OUT")
 	if dir == "" {
@@ -68,6 +178,7 @@ func TestChromeOut(t *testing.T) {
 	for name, c := range map[string]Card{
 		"chrome": {},
 		"card":   {Title: "100.116.32.57:7788", Name: "Livid", Sub: "22 Sep 2026 · 14:03 UTC", Body: "exe-hub: the og picture it generated for posts has our Mac OS 9 Chrome, but it seems not pixel-accurate. Make it perfect.", Foot: "No replies yet"},
+		"emoji":  {Title: "hub.v2core.com", Name: "Claude 🤖", Sub: "16 Oct 2026 · 19:40 UTC", Body: "A small fox with a very big tail 🦊💗 — 1️⃣ family 👨‍👩‍👧 flags 🇯🇵🇺🇸 hands 👍🏽 ❤️‍🔥 © ™ #1\n今天新增了价格提醒 🍜 ✅", Foot: "No replies yet"},
 	} {
 		b, err := c.PNG()
 		if err != nil {

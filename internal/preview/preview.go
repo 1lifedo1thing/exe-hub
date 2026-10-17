@@ -4,8 +4,9 @@
 // chrome at twice the size, so its lines stay crisp at the half the
 // picture is shown at — holding a post's author and words, a profile,
 // or the hub itself. The type is Go Sans, with Droid Sans Fallback
-// (Apache 2.0, see FONTS.md) for the CJK characters it lacks; a
-// character neither has (an emoji) is left out.
+// (Apache 2.0, see FONTS.md) for the CJK characters it lacks; an emoji
+// is Noto Color Emoji's picture of it (emoji.go), and a character none
+// of them has is left out.
 package preview
 
 import (
@@ -21,6 +22,7 @@ import (
 	"strings"
 	"sync"
 	"unicode"
+	"unicode/utf8"
 
 	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/font"
@@ -78,7 +80,10 @@ func load() error {
 		if bold, parseErr = opentype.Parse(gobold.TTF); parseErr != nil {
 			return
 		}
-		fallback, parseErr = opentype.Parse(droidTTF)
+		if fallback, parseErr = opentype.Parse(droidTTF); parseErr != nil {
+			return
+		}
+		parseErr = loadEmoji()
 	})
 	return parseErr
 }
@@ -110,33 +115,47 @@ func (t typeface) face(r rune) font.Face {
 	return nil
 }
 
-func (t typeface) advance(r rune) fixed.Int26_6 {
-	f := t.face(r)
-	if f == nil {
-		return 0
+// advance is how far cluster c moves the pen: an emoji's picture, or
+// each of its characters from the face that has it.
+func (t typeface) advance(c string) (a fixed.Int26_6) {
+	if t.emoji(c) != nil {
+		return t.emojiAdvance()
 	}
-	a, _ := f.GlyphAdvance(r)
+	for _, r := range c {
+		if f := t.face(r); f != nil {
+			ra, _ := f.GlyphAdvance(r)
+			a += ra
+		}
+	}
 	return a
 }
 
 func (t typeface) width(s string) (w fixed.Int26_6) {
-	for _, r := range s {
-		w += t.advance(r)
+	for _, c := range clusters(s) {
+		w += t.advance(c)
 	}
 	return w
 }
 
-// draw sets s with its baseline at y starting at x, a rune at a time
-// so each may come from the face that has it.
+// draw sets s with its baseline at y starting at x, a cluster at a
+// time: an emoji as its picture, else a rune at a time so each may
+// come from the face that has it.
 func (t typeface) draw(dst draw.Image, x, y int, s string, col color.Color) {
 	d := &font.Drawer{Dst: dst, Src: image.NewUniform(col), Dot: fixed.P(x, y)}
-	for _, r := range s {
-		f := t.face(r)
-		if f == nil {
+	for _, c := range clusters(s) {
+		if e := t.emoji(c); e != nil {
+			t.drawEmoji(dst, d.Dot, e)
+			d.Dot.X += t.emojiAdvance()
 			continue
 		}
-		d.Face = f
-		d.DrawString(string(r))
+		for _, r := range c {
+			f := t.face(r)
+			if f == nil {
+				continue
+			}
+			d.Face = f
+			d.DrawString(string(r))
+		}
 	}
 }
 
@@ -154,31 +173,32 @@ func closing(r rune) bool {
 }
 
 // tokens splits a paragraph into the pieces a line is made of: a run
-// of spaces, a word, or one CJK character.
-func tokens(s string) []string {
+// of spaces, a word, or one CJK character or emoji.
+func (t typeface) tokens(s string) []string {
 	var out []string
-	var cur []rune
+	var cur strings.Builder
 	kind := -1 // 0 space, 1 word
 	flush := func() {
-		if len(cur) > 0 {
-			out = append(out, string(cur))
-			cur = cur[:0]
+		if cur.Len() > 0 {
+			out = append(out, cur.String())
+			cur.Reset()
 		}
 	}
-	for _, r := range s {
+	for _, c := range clusters(s) {
+		r, _ := utf8.DecodeRuneInString(c)
 		switch {
 		case unicode.IsSpace(r):
 			if kind != 0 {
 				flush()
 			}
 			kind = 0
-			cur = append(cur, ' ')
-		case breaks(r):
+			cur.WriteByte(' ')
+		case breaks(r) || t.emoji(c) != nil:
 			flush()
 			if closing(r) && len(out) > 0 && out[len(out)-1] != " " {
-				out[len(out)-1] += string(r)
+				out[len(out)-1] += c
 			} else {
-				out = append(out, string(r))
+				out = append(out, c)
 			}
 			kind = -1
 		default:
@@ -186,7 +206,7 @@ func tokens(s string) []string {
 				flush()
 			}
 			kind = 1
-			cur = append(cur, r)
+			cur.WriteString(c)
 		}
 	}
 	flush()
@@ -196,7 +216,8 @@ func tokens(s string) []string {
 // wrap sets text in at most max lines of width w, a word at a time
 // where spaces separate words and a character at a time where a CJK
 // run has none; a newline ends a line, a blank line is dropped. When
-// the text runs past the last line, that line ends in an ellipsis.
+// the text runs past the last line, that line ends in an ellipsis. No
+// line breaks inside an emoji's sequence.
 func (t typeface) wrap(text string, w fixed.Int26_6, max int) []string {
 	var lines []string
 	cut := false
@@ -214,7 +235,7 @@ func (t typeface) wrap(text string, w fixed.Int26_6, max int) []string {
 	}
 	for _, para := range strings.Split(text, "\n") {
 		line := ""
-		for _, tok := range tokens(para) {
+		for _, tok := range t.tokens(para) {
 			if tok == " " && line == "" {
 				continue
 			}
@@ -230,14 +251,14 @@ func (t typeface) wrap(text string, w fixed.Int26_6, max int) []string {
 				continue
 			}
 			// a word wider than the line breaks where it must
-			for _, r := range tok {
-				if t.width(line+string(r)) > w && line != "" {
+			for _, c := range clusters(tok) {
+				if t.width(line+c) > w && line != "" {
 					if !push(line) {
 						break
 					}
 					line = ""
 				}
-				line += string(r)
+				line += c
 			}
 		}
 		if cut {
@@ -248,11 +269,11 @@ func (t typeface) wrap(text string, w fixed.Int26_6, max int) []string {
 		}
 	}
 	if cut && len(lines) > 0 {
-		last := []rune(strings.TrimRight(lines[len(lines)-1], " "))
-		for len(last) > 0 && t.width(string(last)+"…") > w {
+		last := clusters(strings.TrimRight(lines[len(lines)-1], " "))
+		for len(last) > 0 && t.width(strings.Join(last, "")+"…") > w {
 			last = last[:len(last)-1]
 		}
-		lines[len(lines)-1] = strings.TrimRight(string(last), " ") + "…"
+		lines[len(lines)-1] = strings.TrimRight(strings.Join(last, ""), " ") + "…"
 	}
 	return lines
 }

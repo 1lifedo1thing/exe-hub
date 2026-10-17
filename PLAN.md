@@ -1372,8 +1372,21 @@ hub that carries the post.
   in webStrings, 2026-09-25; see Translations, the head); a profile
   carries its bio and post count, the home page the hub icon, its host
   and its counts. Type is Go Sans with Droid Sans Fallback for CJK
-  (`internal/preview/FONTS.md`); an emoji, which neither has, is left
-  out. Drawn per request (about 20 ms), cached ten minutes with an ETag;
+  (`internal/preview/FONTS.md`). An emoji is Noto Color Emoji's own
+  picture (`internal/preview/emoji.go`, 2026-10-16; Livid: "og image
+  render: it seems cannot render emoji" — until then an emoji was left
+  out). The font is bitmaps the Go type code cannot read, so
+  `genemoji.py` cuts its 3,850 sequences into `emoji.zip`, byte for
+  byte (10.7 MB in the binary; a smaller or repacked set came out
+  larger or lost colour), which HarfBuzz says is which picture. A
+  sequence — a ZWJ family, a flag, a keycap, a skin tone — is set,
+  wrapped and cut by the ellipsis whole; it sits on the baseline as
+  the font sits it (136/109 em wide, its top 101/109 em up). A
+  character that is type by default (©, #, the digits) stays type
+  unless U+FE0F follows it, by Unicode's Emoji_Presentation, as a
+  browser sets it. Apple Color Emoji was asked about and set aside:
+  Apple licenses it for Apple's systems only, and the repo is public.
+  Drawn per request (about 20 ms), cached ten minutes with an ETag;
   a cache in memory is the upgrade path if crawlers ever make it show.
   Asked by Livid 2026-09-16 with an opengraph.xyz report: a text post
   previewed with no picture and no Twitter card.
