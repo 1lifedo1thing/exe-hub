@@ -94,4 +94,12 @@ func TestWebT(t *testing.T) {
 	if js := d.JS(); js["loc"] != "ja" || js["s"].(map[string]string)["ok"] != "OK" {
 		t.Errorf("JS() = %v", js)
 	}
+	// a Sign In With Solana statement is printable ASCII on one line, in
+	// every language: Phantom refuses a request with any other
+	for code, l := range webLocales {
+		stmt, _ := (&webData{L: l}).JS()["siws"].(string)
+		if !regexp.MustCompile(`^[ -~]+$`).MatchString(stmt) {
+			t.Errorf("%s siws statement %q is not one line of printable ASCII", code, stmt)
+		}
+	}
 }

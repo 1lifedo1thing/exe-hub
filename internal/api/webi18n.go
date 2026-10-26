@@ -117,9 +117,16 @@ func (l *webLocale) T(key string, kv ...any) string {
 }
 
 // JS is what the page's scripts get, as one JSON object in the head:
-// the strings (s) and the locale the dates are set in (loc, "" for the
-// browser's own).
-func (d *webData) JS() map[string]any { return map[string]any{"s": d.L.S, "loc": d.DateLoc} }
+// the strings (s), the locale the dates are set in (loc, "" for the
+// browser's own) and the statement of a Sign In With Solana request
+// (siws). That one is English in every language: the request's grammar
+// takes ASCII alone there, and Phantom refused the Chinese one, "The
+// app's signature request cannot be shown due to invalid formatting"
+// (Erniu's report, 2026-10-25). The wallet says the rest in its own
+// language.
+func (d *webData) JS() map[string]any {
+	return map[string]any{"s": d.L.S, "loc": d.DateLoc, "siws": webStrings["en"]["signin.stmt"]}
+}
 
 func isOne(v any) bool {
 	switch n := v.(type) {

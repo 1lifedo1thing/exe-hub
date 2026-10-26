@@ -1207,6 +1207,15 @@ hub that carries the post.
   so it can be nothing the hub takes. Kept nowhere and sent nowhere;
   declined, the page stays signed out and the mark stays. A first
   sign-in, never signed out here, is the connect alone, as before.
+  **The Sign In With Solana statement is English (2026-10-25).** The
+  request's statement is printable ASCII on one line by its grammar,
+  and Phantom refused the Chinese one: "The app's signature request
+  cannot be shown due to invalid formatting", so a Sign in after Sign
+  Out failed on the Chinese pages (Erniu's report). The page gets the
+  English statement beside its own words (`siws` in the head's JSON)
+  and puts it in every language's request; the wallet says the rest in
+  its own. The plain message, for a wallet without `solana:signIn`, is
+  any bytes and stays in the reader's language.
   **A send is the account's that pressed the button (2026-10-06).**
   `sendOp` took its author from `me`, awaited `/v1/seq`, and then asked
   whoever `me` was by then to sign: a wallet that turned from A to B

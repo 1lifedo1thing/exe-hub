@@ -2547,14 +2547,15 @@ document.addEventListener("change", e => {
     await signedIn(got);
   }
   async function confirm(w) {
-    const stmt = T("signin.stmt"), siws = !w.legacy && w.features["solana:signIn"];
+    const siws = !w.legacy && w.features["solana:signIn"];
     if (siws) {
-      const [out] = await siws.signIn({ domain: location.host, uri: location.origin, version: "1", statement: stmt, issuedAt: new Date().toISOString() });
+      // the statement in English, which the grammar takes (webData.JS)
+      const [out] = await siws.signIn({ domain: location.host, uri: location.origin, version: "1", statement: HUB.siws, issuedAt: new Date().toISOString() });
       if (!out || !out.account) throw new Error(T("noaccount"));
       return bind(w, out.account);
     }
     const got = await connect(w, false);
-    await got.sign(enc.encode(T("signin.title", { host: location.host }) + "\n\n" + stmt + "\n\n" + new Date().toISOString()));
+    await got.sign(enc.encode(T("signin.title", { host: location.host }) + "\n\n" + T("signin.stmt") + "\n\n" + new Date().toISOString()));
     return got;
   }
   async function signedIn(m) {
